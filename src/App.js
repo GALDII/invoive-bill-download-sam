@@ -195,7 +195,7 @@ function App() {
             📄 Tax Invoice Generator
           </h1>
           <p style={{ margin: '0.5rem 0 0 0', color: 'rgba(255,255,255,0.9)', fontSize: '0.95rem' }}>
-            Professional GST Compliant Invoicing
+             basic billing 
           </p>
         </div>
 
