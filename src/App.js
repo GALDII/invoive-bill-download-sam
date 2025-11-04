@@ -1,11 +1,28 @@
 import React, { useState, useEffect } from 'react';
 
-// Main App Component for the Billing Application
+/**
+* Generates a unique invoice number based on the current timestamp.
+* Format: INV-YYYYMMDD-HHMMSS
+*/
+const generateInvoiceNumber = () => {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0'); // January is 0!
+  const dd = String(today.getDate()).padStart(2, '0');
+  const hh = String(today.getHours()).padStart(2, '0');
+  const min = String(today.getMinutes()).padStart(2, '0');
+  const ss = String(today.getSeconds()).padStart(2, '0');
+  
+  return `INV-${yyyy}${mm}${dd}-${hh}${min}${ss}`;
+};
+
+
+// --- Main App Component ---
 function App() {
-  // A state to ensure scripts are loaded before we use them
+  // --- State Definitions ---
   const [scriptsLoaded, setScriptsLoaded] = useState(false);
 
-  // --- Placeholders ---
+  // Placeholders for empty fields
   const sellerPlaceholders = {
     name: 'VR Traders',
     address: '3/15A Chinnya Gounden Pudhur Road Andipalayam Tiruppur, Tiruppur, Tamil Nadu, 641687',
@@ -23,25 +40,21 @@ function App() {
   };
   
   const invoicePlaceholders = {
-    number: 'INV185',
+    number: 'INV-20251104-123000', // Fallback
   };
 
-  // --- Main State ---
+  // Form States
   const [sellerDetails, setSellerDetails] = useState({
-    name: '', address: '', gstin: '',
-    state: sellerPlaceholders.state,
-    stateCode: sellerPlaceholders.stateCode,
+    name: '', address: '', gstin: '', state: '', stateCode: ''
   });
 
   const [buyerDetails, setBuyerDetails] = useState({
-    name: '', address: '', gstin: '',
-    state: buyerPlaceholders.state,
-    stateCode: buyerPlaceholders.stateCode,
+    name: '', address: '', gstin: '', state: '', stateCode: ''
   });
   
   const [invoiceDetails, setInvoiceDetails] = useState({
-    number: '',
-    date: new Date().toISOString().split('T')[0], // Auto-detects today's date
+    number: generateInvoiceNumber(), // Auto-generate on load
+    date: new Date().toISOString().split('T')[0],
     reverseCharge: 'NO',
   });
 
@@ -49,15 +62,14 @@ function App() {
     { description: '2/60polyester yarn', hsn: '55092200', quantity: 60, unit: '1', rate: 230.0, gstRate: 5 },
   ]);
 
-  // --- NEW Customer Management State ---
+  // Customer Management States
   const [savedCustomers, setSavedCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState('');
   const [isBuyerEditable, setIsBuyerEditable] = useState(true);
 
-
   // --- Effects ---
 
-  // Effect to load scripts
+  // Effect to load external PDF scripts
   useEffect(() => {
     const jspdfScript = document.createElement('script');
     jspdfScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
@@ -77,16 +89,38 @@ function App() {
     };
   }, []);
 
-  // NEW Effect to load customers from local storage on mount
+  // Effect to load customers and last-selected customer from localStorage on mount
   useEffect(() => {
-    const customersFromStorage = localStorage.getItem('savedCustomers');
-    if (customersFromStorage) {
-      setSavedCustomers(JSON.parse(customersFromStorage));
+    let customers = [];
+    try {
+      const customersFromStorage = localStorage.getItem('savedCustomers');
+      if (customersFromStorage) {
+        customers = JSON.parse(customersFromStorage);
+        setSavedCustomers(customers);
+      }
+    } catch (error) {
+      console.error("Failed to load customers from localStorage", error);
+      localStorage.removeItem('savedCustomers');
+    }
+
+    try {
+      const lastSelected = localStorage.getItem('lastSelectedCustomer');
+      if (lastSelected && customers.length > 0) {
+        const customer = customers.find(c => c.name === lastSelected);
+        if (customer) {
+          setBuyerDetails(customer);
+          setSelectedCustomer(customer.name);
+          setIsBuyerEditable(false);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load last selected customer", error);
+      localStorage.removeItem('lastSelectedCustomer');
     }
   }, []);
 
 
-  // --- Item Handlers (Unchanged) ---
+  // --- Item Handlers ---
   const handleItemChange = (index, field, value) => {
     const newItems = [...items];
     const numericFields = ['quantity', 'rate', 'gstRate'];
@@ -107,13 +141,13 @@ function App() {
     setItems(newItems);
   };
   
-  // --- Calculation Logic (Unchanged) ---
+  // --- Calculation Logic ---
   const calculateTotals = () => {
     let subtotal = 0, totalCgst = 0, totalSgst = 0;
     items.forEach(item => {
-        const taxableValue = item.quantity * item.rate;
+        const taxableValue = (parseFloat(item.quantity) || 0) * (parseFloat(item.rate) || 0);
         subtotal += taxableValue;
-        const gstAmount = (taxableValue * item.gstRate) / 100;
+        const gstAmount = (taxableValue * (parseFloat(item.gstRate) || 0)) / 100;
         totalCgst += gstAmount / 2;
         totalSgst += gstAmount / 2;
     });
@@ -123,15 +157,11 @@ function App() {
   
   const totals = calculateTotals();
 
-  // --- NEW Customer Management Handlers ---
+  // --- Customer Management Handlers ---
 
   /** Resets the buyer form to be empty and editable */
   const clearBuyerFields = () => {
-    setBuyerDetails({
-      name: '', address: '', gstin: '',
-      state: buyerPlaceholders.state,
-      stateCode: buyerPlaceholders.stateCode,
-    });
+    setBuyerDetails({ name: '', address: '', gstin: '', state: '', stateCode: '' });
     setIsBuyerEditable(true);
   };
 
@@ -143,16 +173,14 @@ function App() {
     if (customerName === "") {
       // "Select Existing Customer" was chosen
       clearBuyerFields();
+      localStorage.removeItem('lastSelectedCustomer');
     } else {
       // Find the customer and fill details
       const customer = savedCustomers.find(c => c.name === customerName);
       if (customer) {
-        setBuyerDetails({
-          ...customer,
-          state: buyerPlaceholders.state, // Ensure these are not lost
-          stateCode: buyerPlaceholders.stateCode,
-        });
+        setBuyerDetails(customer);
         setIsBuyerEditable(false); // Make fields read-only
+        localStorage.setItem('lastSelectedCustomer', customer.name);
       }
     }
   };
@@ -161,39 +189,68 @@ function App() {
   const handleAddNewCustomer = () => {
     setSelectedCustomer(''); // Reset dropdown
     clearBuyerFields(); // Clear fields and make editable
+    localStorage.removeItem('lastSelectedCustomer');
   };
 
   /** Handles saving the current buyer details to local storage */
   const handleSaveCustomer = () => {
-    const { name, address, gstin } = buyerDetails;
+    const { name, address, gstin, state, stateCode } = buyerDetails;
 
     // Validation
     if (name.trim() === '') {
       alert('Customer Name cannot be empty.');
       return;
     }
-
     if (savedCustomers.find(c => c.name.toLowerCase() === name.trim().toLowerCase())) {
       alert('A customer with this name already exists.');
       return;
     }
 
-    // Create new customer object (without state/stateCode)
-    const newCustomer = { name: name.trim(), address: address.trim(), gstin: gstin.trim() };
-    const updatedCustomers = [...savedCustomers, newCustomer];
+    const newCustomer = { 
+      name: name.trim(), 
+      address: address.trim(), 
+      gstin: gstin.trim(),
+      state: state.trim(),
+      stateCode: stateCode.trim()
+    };
+    const updatedCustomers = [...savedCustomers, newCustomer].sort((a, b) => a.name.localeCompare(b.name)); // Keep list sorted
 
     // Update state and local storage
     setSavedCustomers(updatedCustomers);
     localStorage.setItem('savedCustomers', JSON.stringify(updatedCustomers));
-
+    
     // Post-save actions
     setSelectedCustomer(newCustomer.name); // Auto-select new customer
     setIsBuyerEditable(false); // Make fields read-only
+    localStorage.setItem('lastSelectedCustomer', newCustomer.name);
     alert('Customer saved successfully!');
   };
 
+  /** Deletes the currently selected customer */
+  const handleDeleteCustomer = () => {
+    if (!selectedCustomer) {
+      alert("Please select a customer to delete.");
+      return;
+    }
 
-  // --- PDF Generation (Unchanged) ---
+    if (window.confirm(`Are you sure you want to delete ${selectedCustomer}?`)) {
+      const updatedCustomers = savedCustomers.filter(c => c.name !== selectedCustomer);
+      
+      setSavedCustomers(updatedCustomers);
+      localStorage.setItem('savedCustomers', JSON.stringify(updatedCustomers));
+      
+      // Clear last selected if it was the one deleted
+      if (localStorage.getItem('lastSelectedCustomer') === selectedCustomer) {
+        localStorage.removeItem('lastSelectedCustomer');
+      }
+
+      handleAddNewCustomer(); // Reset form
+      alert('Customer deleted.');
+    }
+  };
+
+
+  // --- PDF Generation ---
   const generatePDF = () => {
     if (!scriptsLoaded) {
       console.error("PDF generation scripts are not loaded yet.");
@@ -207,20 +264,21 @@ function App() {
     const margin = 14;
     const center = pageWidth / 2;
 
+    // Use state value OR placeholder if state is empty
     const pdfSeller = {
       name: sellerDetails.name || sellerPlaceholders.name,
       address: sellerDetails.address || sellerPlaceholders.address,
       gstin: sellerDetails.gstin || sellerPlaceholders.gstin,
-      state: sellerDetails.state,
-      stateCode: sellerDetails.stateCode
+      state: sellerDetails.state || sellerPlaceholders.state,
+      stateCode: sellerDetails.stateCode || sellerPlaceholders.stateCode
     };
 
     const pdfBuyer = {
       name: buyerDetails.name || buyerPlaceholders.name,
       address: buyerDetails.address || buyerPlaceholders.address,
       gstin: buyerDetails.gstin || buyerPlaceholders.gstin,
-      state: buyerDetails.state,
-      stateCode: buyerDetails.stateCode
+      state: buyerDetails.state || buyerPlaceholders.state,
+      stateCode: buyerDetails.stateCode || buyerPlaceholders.stateCode
     };
 
     const pdfInvoice = {
@@ -332,7 +390,7 @@ function App() {
     doc.text(conStateText, conStateX + 2, rightY + 10);
 
     // 5. Product Details Table
-    const tableStartY = Math.max(leftY, rightY) + 15;
+    const tableStartY = Math.max(leftY, rightY) + 20; // Added extra 5mm spacing
     const tableHead = [
         [
             { content: 'Sr. No.', rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
@@ -354,9 +412,9 @@ function App() {
     
     const tableBody = [];
     items.forEach((item, index) => {
-        const taxableValue = item.quantity * item.rate;
-        const cgstRate = item.gstRate / 2;
-        const sgstRate = item.gstRate / 2;
+        const taxableValue = (parseFloat(item.quantity) || 0) * (parseFloat(item.rate) || 0);
+        const cgstRate = (parseFloat(item.gstRate) || 0) / 2;
+        const sgstRate = (parseFloat(item.gstRate) || 0) / 2;
         const cgstAmount = (taxableValue * cgstRate) / 100;
         const sgstAmount = (taxableValue * sgstRate) / 100;
         const itemTotal = taxableValue + cgstAmount + sgstAmount;
@@ -370,7 +428,7 @@ function App() {
         ]);
     });
     
-    const totalQty = items.reduce((sum, item) => sum + item.quantity, 0);
+    const totalQty = items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
     tableBody.push([
         { content: 'Total', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } },
         { content: totalQty, styles: { fontStyle: 'bold', halign: 'center' } }, '', '', 
@@ -385,10 +443,18 @@ function App() {
         headStyles: { fillColor: [232, 241, 252], textColor: 0, fontSize: 8, lineWidth: 0.1, lineColor: [150, 150, 150] },
         styles: { fontSize: 8, lineWidth: 0.1, lineColor: [150, 150, 150], cellPadding: 1.5 },
         columnStyles: {
-            0: { halign: 'center', cellWidth: 10 }, 1: { cellWidth: 35 }, 2: { halign: 'center' },
-            3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'right' },
-            6: { halign: 'right' }, 7: { halign: 'right', cellWidth: 12 }, 8: { halign: 'right' },
-            9: { halign: 'right', cellWidth: 12 }, 10: { halign: 'right' }, 11: { halign: 'right' },
+            0: { halign: 'center', cellWidth: 10 }, // Sr. No.
+            1: { cellWidth: 35 }, // Name of Product
+            2: { halign: 'center' }, // HSN
+            3: { halign: 'center', cellWidth: 10 }, // QTY
+            4: { halign: 'center', cellWidth: 10 }, // Unit
+            5: { halign: 'right' }, // Rate
+            6: { halign: 'right' }, // Taxable
+            7: { halign: 'right', cellWidth: 12 }, // CGST Rate
+            8: { halign: 'right' }, // CGST Amt
+            9: { halign: 'right', cellWidth: 12 }, // SGST Rate
+            10: { halign: 'right' }, // SGST Amt
+            11: { halign: 'right' }, // Total
         },
         didDrawCell: (data) => {
             if (data.row.index === tableBody.length - 1) {
@@ -406,7 +472,14 @@ function App() {
     doc.setFont('helvetica', 'bold');
     doc.text('Total Invoice Amount in words', margin, newY);
     doc.setFont('helvetica', 'normal');
-    doc.text('Fourteen Thousand Four Hundred Ninety Rupees Only /-', margin, newY + 5);
+
+    // --- Text Wrapping FIX ---
+    const leftColumnWidth = (pageWidth / 2) - margin - 5; // Width for the left side
+    // TODO: This should be made dynamic from totals.grandTotal
+    const amountInWords = "Fourteen Thousand Four Hundred Ninety Rupees Only /-"; 
+    const wrappedText = doc.splitTextToSize(amountInWords, leftColumnWidth);
+    doc.text(wrappedText, margin, newY + 5);
+    // --- End of Text Wrapping FIX ---
     
     const summaryTableWidth = (pageWidth / 2) - margin - 10;
     doc.autoTable({
@@ -431,7 +504,10 @@ function App() {
     
     // 7. Terms & Signature
     let summaryTableY = doc.autoTable.previous.finalY;
-    let bottomY = Math.max(newY + 15, summaryTableY) + 10;
+    // Check which element is lower: the wrapped text or the summary table
+    let textHeight = (wrappedText.length * 4); // Estimate height of wrapped text
+    let leftBottomY = newY + 5 + textHeight;
+    let bottomY = Math.max(leftBottomY, summaryTableY) + 10;
     
     if (bottomY > pageHeight - 30) {
         doc.addPage();
@@ -465,53 +541,48 @@ function App() {
 
   // --- JSX (HTML Structure) ---
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '2rem 1rem', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto', background: 'white', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
+    <div style={styles.page}>
+      <div style={styles.container}>
         
         {/* Header Section */}
-        <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '2rem', textAlign: 'center' }}>
-          <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: '700', color: 'white', letterSpacing: '0.5px' }}>
-            📄 Tax Invoice Generator
-          </h1>
-          <p style={{ margin: '0.5rem 0 0 0', color: 'rgba(255,255,255,0.9)', fontSize: '0.95rem' }}>
-             basic billing 
-          </p>
+        <div style={styles.header}>
+          <h1 style={styles.headerTitle}>📄 Tax Invoice Generator</h1>
+          <p style={styles.headerSubtitle}>basic billing</p>
         </div>
 
-        <div style={{ padding: '2rem' }}>
+        <div style={styles.content}>
           {/* Invoice Details Section */}
-          <div style={{ marginBottom: '2rem', padding: '1.25rem', background: '#f8f9fa', borderRadius: '12px', border: '2px solid #e9ecef' }}>
+          <div style={styles.card}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', color: '#495057', marginBottom: '0.5rem' }}>Invoice Number</label>
+                <label style={styles.label}>Invoice Number</label>
                 <input 
                   type="text" 
                   value={invoiceDetails.number}
-                  placeholder={invoicePlaceholders.number} 
-                  onChange={(e) => setInvoiceDetails({...invoiceDetails, number: e.target.value})}
-                  style={{ width: '100%', padding: '0.75rem', border: '2px solid #dee2e6', borderRadius: '8px', fontSize: '0.95rem', fontWeight: '600', color: '#667eea' }}
+                  readOnly // Generated automatically
+                  style={{...styles.input, fontWeight: '600', color: '#667eea', background: '#e9ecef', cursor: 'not-allowed'}}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', color: '#495057', marginBottom: '0.5rem' }}>Invoice Date</label>
+                <label style={styles.label}>Invoice Date</label>
                 <input 
                   type="date" 
                   value={invoiceDetails.date} 
                   onChange={(e) => setInvoiceDetails({...invoiceDetails, date: e.target.value})}
-                  style={{ width: '100%', padding: '0.75rem', border: '2px solid #dee2e6', borderRadius: '8px', fontSize: '0.95rem' }}
+                  style={styles.input}
                 />
               </div>
             </div>
           </div>
 
-          {/* --- NEW CUSTOMER MANAGEMENT SECTION --- */}
-          <div style={{ marginBottom: '2rem', padding: '1.25rem', background: '#f8f9fa', borderRadius: '12px', border: '2px solid #e9ecef' }}>
-            <h2 style={{ margin: '0 0 1rem 0', fontSize: '1.2rem', fontWeight: '700', color: '#1f2937' }}>Customer Management</h2>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          {/* Customer Management Section */}
+          <div style={styles.card}>
+            <h2 style={styles.cardTitle}>Customer Management</h2>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '1rem' }}>
               <select 
                 value={selectedCustomer}
                 onChange={handleCustomerSelect}
-                style={{ flexGrow: 1, padding: '0.75rem', border: '2px solid #dee2e6', borderRadius: '8px', fontSize: '0.95rem' }}
+                style={{...styles.input, flex: '1 1 300px', minWidth: '250px'}}
               >
                 <option value="">--- Select Existing Customer ---</option>
                 {savedCustomers.map((cust, index) => (
@@ -520,113 +591,114 @@ function App() {
               </select>
               <button 
                 onClick={handleAddNewCustomer}
-                style={{ background: '#5a67d8', color: 'white', border: 'none', padding: '0.75rem 1.5rem', borderRadius: '8px', fontSize: '0.95rem', fontWeight: '600', cursor: 'pointer' }}
+                style={{...styles.button, ...styles.secondary, flex: '1 1 auto'}}
               >
                 + Add New Customer
               </button>
+              <button 
+                onClick={handleDeleteCustomer}
+                disabled={!selectedCustomer}
+                style={{...styles.button, ...styles.danger, flex: '1 1 auto', opacity: !selectedCustomer ? 0.6 : 1}}
+              >
+                Delete Selected
+              </button>
             </div>
           </div>
-          {/* --- END OF NEW SECTION --- */}
-
 
           {/* Seller and Buyer Details */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem', marginBottom: '2rem' }}>
-            {/* Seller Details (VR Traders) */}
-            <div style={{ background: '#fff8f0', padding: '1.5rem', borderRadius: '12px', border: '2px solid #ffedd5' }}>
-              <h2 style={{ margin: '0 0 1.25rem 0', fontSize: '1.1rem', fontWeight: '700', color: '#ea580c', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span>🏢</span> Seller Details
-              </h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '600', color: '#7c2d12', marginBottom: '0.4rem' }}>Business Name</label>
-                  <input 
-                    type="text" 
-                    value={sellerDetails.name}
-                    placeholder={sellerPlaceholders.name}
-                    onChange={(e) => setSellerDetails({...sellerDetails, name: e.target.value})} 
-                    style={{ width: '100%', padding: '0.7rem', border: '2px solid #fed7aa', borderRadius: '8px', fontSize: '0.9rem', background: 'white' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '600', color: '#7c2d12', marginBottom: '0.4rem' }}>Address</label>
-                  <textarea 
-                    value={sellerDetails.address}
-                    placeholder={sellerPlaceholders.address}
-                    onChange={(e) => setSellerDetails({...sellerDetails, address: e.target.value})} 
-                    rows="2"
-                    style={{ width: '100%', padding: '0.7rem', border: '2px solid #fed7aa', borderRadius: '8px', fontSize: '0.9rem', background: 'white', resize: 'vertical' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '600', color: '#7c2d12', marginBottom: '0.4rem' }}>GSTIN</label>
-                  <input 
-                    type="text" 
-                    value={sellerDetails.gstin}
-                    placeholder={sellerPlaceholders.gstin}
-                    onChange={(e) => setSellerDetails({...sellerDetails, gstin: e.target.value})} 
-                    style={{ width: '100%', padding: '0.7rem', border: '2px solid #fed7aa', borderRadius: '8px', fontSize: '0.9rem', background: 'white', fontFamily: 'monospace' }}
-                  />
-                </div>
+            {/* Seller Details */}
+            <div style={styles.sellerCard}>
+              <h2 style={{...styles.cardTitle, color: '#ea580c'}}><span>🏢</span> Seller Details</h2>
+              <div style={styles.formGrid}>
+                <InputGroup 
+                  label="Business Name" 
+                  value={sellerDetails.name} 
+                  placeholder={sellerPlaceholders.name}
+                  onChange={(e) => setSellerDetails({...sellerDetails, name: e.target.value})} 
+                  theme="orange"
+                />
+                <TextareaGroup 
+                  label="Address" 
+                  value={sellerDetails.address}
+                  placeholder={sellerPlaceholders.address}
+                  onChange={(e) => setSellerDetails({...sellerDetails, address: e.target.value})} 
+                  theme="orange"
+                />
+                <InputGroup 
+                  label="GSTIN" 
+                  value={sellerDetails.gstin} 
+                  placeholder={sellerPlaceholders.gstin}
+                  onChange={(e) => setSellerDetails({...sellerDetails, gstin: e.target.value})} 
+                  theme="orange"
+                  isMonospace={true}
+                />
+                <InputGroup 
+                  label="State" 
+                  value={sellerDetails.state} 
+                  placeholder={sellerPlaceholders.state}
+                  onChange={(e) => setSellerDetails({...sellerDetails, state: e.target.value})} 
+                  theme="orange"
+                />
+                <InputGroup 
+                  label="State Code" 
+                  value={sellerDetails.stateCode} 
+                  placeholder={sellerPlaceholders.stateCode}
+                  onChange={(e) => setSellerDetails({...sellerDetails, stateCode: e.target.value})} 
+                  theme="orange"
+                />
               </div>
             </div>
 
-            {/* Buyer Details (Updated with readOnly and Save Button) */}
-            <div style={{ background: '#f0f9ff', padding: '1.5rem', borderRadius: '12px', border: '2px solid #bae6fd' }}>
-              <h2 style={{ margin: '0 0 1.25rem 0', fontSize: '1.1rem', fontWeight: '700', color: '#0284c7', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span>👤</span> Buyer Details
-              </h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '600', color: '#075985', marginBottom: '0.4rem' }}>Business Name</label>
-                  <input 
-                    type="text" 
-                    value={buyerDetails.name}
-                    placeholder={buyerPlaceholders.name} 
-                    readOnly={!isBuyerEditable}
-                    onChange={(e) => setBuyerDetails({...buyerDetails, name: e.target.value})} 
-                    style={{ 
-                      width: '100%', padding: '0.7rem', border: '2px solid #7dd3fc', borderRadius: '8px', fontSize: '0.9rem', 
-                      background: isBuyerEditable ? 'white' : '#e9ecef', 
-                      cursor: isBuyerEditable ? 'auto' : 'not-allowed' 
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '600', color: '#075985', marginBottom: '0.4rem' }}>Address</label>
-                  <textarea 
-                    value={buyerDetails.address}
-                    placeholder={buyerPlaceholders.address}
-                    readOnly={!isBuyerEditable}
-                    onChange={(e) => setBuyerDetails({...buyerDetails, address: e.target.value})} 
-                    rows="2"
-                    style={{ 
-                      width: '100%', padding: '0.7rem', border: '2px solid #7dd3fc', borderRadius: '8px', fontSize: '0.9rem', resize: 'vertical',
-                      background: isBuyerEditable ? 'white' : '#e9ecef', 
-                      cursor: isBuyerEditable ? 'auto' : 'not-allowed' 
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '600', color: '#075985', marginBottom: '0.4rem' }}>GSTIN</label>
-                  <input 
-                    type="text" 
-                    value={buyerDetails.gstin}
-                    placeholder={buyerPlaceholders.gstin}
-                    readOnly={!isBuyerEditable}
-                    onChange={(e) => setBuyerDetails({...buyerDetails, gstin: e.target.value})} 
-                    style={{ 
-                      width: '100%', padding: '0.7rem', border: '2px solid #7dd3fc', borderRadius: '8px', fontSize: '0.9rem', fontFamily: 'monospace',
-                      background: isBuyerEditable ? 'white' : '#e9ecef', 
-                      cursor: isBuyerEditable ? 'auto' : 'not-allowed' 
-                    }}
-                  />
-                </div>
-
-                {/* Conditional Save Button */}
+            {/* Buyer Details */}
+            <div style={styles.buyerCard}>
+              <h2 style={{...styles.cardTitle, color: '#0284c7'}}><span>👤</span> Buyer Details</h2>
+              <div style={styles.formGrid}>
+                <InputGroup 
+                  label="Business Name" 
+                  value={buyerDetails.name} 
+                  placeholder={buyerPlaceholders.name}
+                  onChange={(e) => setBuyerDetails({...buyerDetails, name: e.target.value})} 
+                  theme="blue"
+                  readOnly={!isBuyerEditable}
+                />
+                <TextareaGroup 
+                  label="Address" 
+                  value={buyerDetails.address}
+                  placeholder={buyerPlaceholders.address}
+                  onChange={(e) => setBuyerDetails({...buyerDetails, address: e.target.value})} 
+                  theme="blue"
+                  readOnly={!isBuyerEditable}
+                />
+                <InputGroup 
+                  label="GSTIN" 
+                  value={buyerDetails.gstin} 
+                  placeholder={buyerPlaceholders.gstin}
+                  onChange={(e) => setBuyerDetails({...buyerDetails, gstin: e.target.value})} 
+                  theme="blue"
+                  isMonospace={true}
+                  readOnly={!isBuyerEditable}
+                />
+                <InputGroup 
+                  label="State" 
+                  value={buyerDetails.state} 
+                  placeholder={buyerPlaceholders.state}
+                  onChange={(e) => setBuyerDetails({...buyerDetails, state: e.target.value})} 
+                  theme="blue"
+                  readOnly={!isBuyerEditable}
+                />
+                <InputGroup 
+                  label="State Code" 
+                  value={buyerDetails.stateCode} 
+                  placeholder={buyerPlaceholders.stateCode}
+                  onChange={(e) => setBuyerDetails({...buyerDetails, stateCode: e.target.value})} 
+                  theme="blue"
+                  readOnly={!isBuyerEditable}
+                />
                 {isBuyerEditable && (
                   <button 
                     onClick={handleSaveCustomer}
-                    style={{ marginTop: '0.5rem', background: '#22c55e', color: 'white', border: 'none', padding: '0.75rem', borderRadius: '8px', fontSize: '0.95rem', fontWeight: '600', cursor: 'pointer' }}
+                    style={{...styles.button, ...styles.success, marginTop: '0.5rem'}}
                   >
                     Save New Customer
                   </button>
@@ -635,86 +707,37 @@ function App() {
             </div>
           </div>
 
-          {/* Items Table (Unchanged) */}
+          {/* Items Table */}
           <div style={{ marginBottom: '2rem' }}>
-            <h2 style={{ margin: '0 0 1rem 0', fontSize: '1.2rem', fontWeight: '700', color: '#1f2937' }}>Invoice Items</h2>
-            <div style={{ overflowX: 'auto', borderRadius: '12px', border: '2px solid #e5e7eb' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', background: 'white' }}>
+            <h2 style={{...styles.cardTitle, color: '#1f2937'}}>Invoice Items</h2>
+            <div style={styles.tableWrapper}>
+              <table style={styles.table}>
                 <thead>
-                  <tr style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-                    <th style={{ padding: '1rem 0.75rem', textAlign: 'left', color: 'white', fontSize: '0.85rem', fontWeight: '600', whiteSpace: 'nowrap' }}>Item Description</th>
-                    <th style={{ padding: '1rem 0.75rem', textAlign: 'left', color: 'white', fontSize: '0.85rem', fontWeight: '600', whiteSpace: 'nowrap' }}>HSN/SAC</th>
-                    <th style={{ padding: '1rem 0.75rem', textAlign: 'center', color: 'white', fontSize: '0.85rem', fontWeight: '600', whiteSpace: 'nowrap' }}>Qty</th>
-                    <th style={{ padding: '1rem 0.75rem', textAlign: 'center', color: 'white', fontSize: '0.85rem', fontWeight: '600', whiteSpace: 'nowrap' }}>Unit</th>
-                    <th style={{ padding: '1rem 0.75rem', textAlign: 'right', color: 'white', fontSize: '0.85rem', fontWeight: '600', whiteSpace: 'nowrap' }}>Rate (₹)</th>
-                    <th style={{ padding: '1rem 0.75rem', textAlign: 'center', color: 'white', fontSize: '0.85rem', fontWeight: '600', whiteSpace: 'nowrap' }}>GST %</th>
-                    <th style={{ padding: '1rem 0.75rem', textAlign: 'right', color: 'white', fontSize: '0.85rem', fontWeight: '600', whiteSpace: 'nowrap' }}>Total (₹)</th>
-                    <th style={{ padding: '1rem 0.75rem', textAlign: 'center', color: 'white', fontSize: '0.85rem', fontWeight: '600', width: '50px' }}></th>
+                  <tr style={styles.tableHeaderRow}>
+                    <th style={styles.tableHeader}>Item Description</th>
+                    <th style={styles.tableHeader}>HSN/SAC</th>
+                    <th style={styles.tableHeader}>Qty</th>
+                    <th style={styles.tableHeader}>Unit</th>
+                    <th style={styles.tableHeader}>Rate (₹)</th>
+                    <th style={styles.tableHeader}>GST %</th>
+                    <th style={styles.tableHeader}>Total (₹)</th>
+                    <th style={styles.tableHeader}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((item, index) => (
-                    <tr key={index} style={{ borderBottom: '1px solid #e5e7eb', background: index % 2 === 0 ? '#fafafa' : 'white' }}>
-                      <td style={{ padding: '0.75rem' }}>
-                        <input 
-                          type="text" 
-                          value={item.description} 
-                          onChange={(e) => handleItemChange(index, 'description', e.target.value)} 
-                          placeholder="Item name"
-                          style={{ width: '100%', minWidth: '150px', padding: '0.6rem', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '0.9rem' }}
-                        />
+                    <tr key={index} style={styles.tableBodyRow(index)}>
+                      <td style={styles.tableCell}><input type="text" value={item.description} onChange={(e) => handleItemChange(index, 'description', e.target.value)} placeholder="Item name" style={{...styles.tableInput, minWidth: '150px'}}/></td>
+                      <td style={styles.tableCell}><input type="text" value={item.hsn} onChange={(e) => handleItemChange(index, 'hsn', e.target.value)} placeholder="HSN" style={{...styles.tableInput, width: '110px', fontFamily: 'monospace'}}/></td>
+                      <td style={styles.tableCell}><input type="number" value={item.quantity} onChange={(e) => handleItemChange(index, 'quantity', e.target.value)} style={{...styles.tableInput, width: '80px', textAlign: 'center'}}/></td>
+                      <td style={styles.tableCell}><input type="text" value={item.unit} onChange={(e) => handleItemChange(index, 'unit', e.target.value)} style={{...styles.tableInput, width: '70px', textAlign: 'center'}}/></td>
+                      <td style={styles.tableCell}><input type="number" value={item.rate} onChange={(e) => handleItemChange(index, 'rate', e.target.value)} style={{...styles.tableInput, width: '100px', textAlign: 'right'}}/></td>
+                      <td style={styles.tableCell}><input type="number" value={item.gstRate} onChange={(e) => handleItemChange(index, 'gstRate', e.target.value)} style={{...styles.tableInput, width: '70px', textAlign: 'center'}}/></td>
+                      <td style={{...styles.tableCell, textAlign: 'right', fontWeight: '600', color: '#059669', fontSize: '0.95rem'}}>
+                        ₹{((parseFloat(item.quantity) || 0) * (parseFloat(item.rate) || 0) * (1 + (parseFloat(item.gstRate) || 0) / 100)).toFixed(2)}
                       </td>
-                      <td style={{ padding: '0.75rem' }}>
-                        <input 
-                          type="text" 
-                          value={item.hsn} 
-                          onChange={(e) => handleItemChange(index, 'hsn', e.target.value)} 
-                          placeholder="HSN"
-                          style={{ width: '110px', padding: '0.6rem', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '0.9rem', fontFamily: 'monospace' }}
-                        />
-                      </td>
-                      <td style={{ padding: '0.75rem' }}>
-                        <input 
-                          type="number" 
-                          value={item.quantity} 
-                          onChange={(e) => handleItemChange(index, 'quantity', parseFloat(e.target.value))} 
-                          style={{ width: '80px', padding: '0.6rem', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '0.9rem', textAlign: 'center' }}
-                        />
-                      </td>
-                      <td style={{ padding: '0.75rem' }}>
-                        <input 
-                          type="text" 
-                          value={item.unit} 
-                          onChange={(e) => handleItemChange(index, 'unit', e.target.value)} 
-                          style={{ width: '70px', padding: '0.6rem', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '0.9rem', textAlign: 'center' }}
-                        />
-                      </td>
-                      <td style={{ padding: '0.75rem' }}>
-                        <input 
-                          type="number" 
-                          value={item.rate} 
-                          onChange={(e) => handleItemChange(index, 'rate', parseFloat(e.target.value))} 
-                          style={{ width: '100px', padding: '0.6rem', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '0.9rem', textAlign: 'right' }}
-                        />
-                      </td>
-                      <td style={{ padding: '0.75rem' }}>
-                        <input 
-                          type="number" 
-                          value={item.gstRate} 
-                          onChange={(e) => handleItemChange(index, 'gstRate', parseFloat(e.target.value))} 
-                          style={{ width: '70px', padding: '0.6rem', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '0.9rem', textAlign: 'center' }}
-                        />
-                      </td>
-                      <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '600', color: '#059669', fontSize: '0.95rem' }}>
-                        ₹{(item.quantity * item.rate * (1 + item.gstRate / 100)).toFixed(2)}
-                      </td>
-                      <td style={{ padding: '0.75rem', textAlign: 'center' }}>
-                        <button 
-                          onClick={() => removeItem(index)} 
-                          style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', width: '32px', height: '32px', cursor: 'pointer', fontSize: '1rem', fontWeight: 'bold' }}
-                        >
-                          ×
-                        </button>
+                      <td style={{...styles.tableCell, textAlign: 'center'}}>
+                        <button onClick={() => removeItem(index)} style={styles.deleteItemButton}>×</button>
                       </td>
                     </tr>
                   ))}
@@ -723,7 +746,7 @@ function App() {
             </div>
             <button 
               onClick={addItem} 
-              style={{ marginTop: '1rem', background: '#3b82f6', color: 'white', border: 'none', padding: '0.75rem 1.5rem', borderRadius: '8px', fontSize: '0.95rem', fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s' }}
+              style={{...styles.button, ...styles.primary, marginTop: '1rem'}}
               onMouseOver={(e) => e.target.style.background = '#2563eb'}
               onMouseOut={(e) => e.target.style.background = '#3b82f6'}
             >
@@ -731,22 +754,14 @@ function App() {
             </button>
           </div>
 
-          {/* Totals and Action Section (Unchanged) */}
+          {/* Totals and Action Section */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem', alignItems: 'start' }}>
             {/* PDF Generation Button */}
             <div>
               <button 
                 onClick={generatePDF} 
                 disabled={!scriptsLoaded}
-                style={{ 
-                  width: '100%',
-                  background: scriptsLoaded ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : '#9ca3af', 
-                  color: 'white', border: 'none', padding: '1.25rem', borderRadius: '12px', 
-                  fontSize: '1.1rem', fontWeight: '700', 
-                  cursor: scriptsLoaded ? 'pointer' : 'not-allowed', 
-                  boxShadow: scriptsLoaded ? '0 4px 14px rgba(16, 185, 129, 0.4)' : 'none',
-                  transition: 'all 0.3s'
-                }}
+                style={{...styles.button, ...styles.generateButton, opacity: scriptsLoaded ? 1 : 0.6, cursor: scriptsLoaded ? 'pointer' : 'not-allowed'}}
                 onMouseOver={(e) => {if(scriptsLoaded) e.target.style.transform = 'translateY(-2px)'}}
                 onMouseOut={(e) => {if(scriptsLoaded) e.target.style.transform = 'translateY(0)'}}
               >
@@ -755,23 +770,14 @@ function App() {
             </div>
 
             {/* Totals Summary */}
-            <div style={{ background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', padding: '1.5rem', borderRadius: '12px', border: '2px solid #86efac' }}>
+            <div style={styles.totalsCard}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0', borderBottom: '1px solid #bbf7d0' }}>
-                  <span style={{ color: '#166534', fontWeight: '600', fontSize: '0.95rem' }}>Subtotal:</span>
-                  <span style={{ color: '#166534', fontWeight: '600', fontSize: '1rem' }}>₹{totals.subtotal.toFixed(2)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0', borderBottom: '1px solid #bbf7d0' }}>
-                  <span style={{ color: '#166534', fontWeight: '600', fontSize: '0.95rem' }}>CGST:</span>
-                  <span style={{ color: '#166534', fontWeight: '600', fontSize: '1rem' }}>₹{totals.totalCgst.toFixed(2)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0', borderBottom: '1px solid #bbf7d0' }}>
-                  <span style={{ color: '#166534', fontWeight: '600', fontSize: '0.95rem' }}>SGST:</span>
-                  <span style={{ color: '#166534', fontWeight: '600', fontSize: '1rem' }}>₹{totals.totalSgst.toFixed(2)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 0', marginTop: '0.5rem' }}>
+                <TotalsRow label="Subtotal:" value={`₹${totals.subtotal.toFixed(2)}`} />
+                <TotalsRow label="CGST:" value={`₹${totals.totalCgst.toFixed(2)}`} />
+                <TotalsRow label="SGST:" value={`₹${totals.totalSgst.toFixed(2)}`} />
+                <div style={{...styles.totalsRow, paddingTop: '0.75rem', marginTop: '0.5rem', borderTop: 'none'}}>
                   <span style={{ color: '#14532d', fontWeight: '700', fontSize: '1.2rem' }}>Grand Total:</span>
-                  <span style={{ color: '#15803d', fontWeight: '7G00', fontSize: '1.5rem' }}>₹{totals.grandTotal.toFixed(2)}</span>
+                  <span style={{ color: '#15803d', fontWeight: '700', fontSize: '1.5rem' }}>₹{totals.grandTotal.toFixed(2)}</span>
                 </div>
               </div>
             </div>
@@ -781,5 +787,113 @@ function App() {
     </div>
   );
 }
+
+// --- Reusable Components ---
+
+const InputGroup = ({ label, value, placeholder, onChange, theme, isMonospace = false, readOnly = false }) => (
+  <div>
+    <label style={styles.formLabel(theme)}>{label}</label>
+    <input 
+      type="text" 
+      value={value}
+      placeholder={placeholder}
+      onChange={onChange}
+      readOnly={readOnly}
+      style={{
+        ...styles.formInput(theme),
+        fontFamily: isMonospace ? 'monospace' : 'inherit',
+        background: readOnly ? '#e9ecef' : 'white',
+        cursor: readOnly ? 'not-allowed' : 'auto'
+      }}
+    />
+  </div>
+);
+
+const TextareaGroup = ({ label, value, placeholder, onChange, theme, readOnly = false }) => (
+  <div>
+    <label style={styles.formLabel(theme)}>{label}</label>
+    <textarea 
+      value={value}
+      placeholder={placeholder}
+      onChange={onChange}
+      readOnly={readOnly}
+      rows="2"
+      style={{
+        ...styles.formInput(theme),
+        resize: 'vertical',
+        background: readOnly ? '#e9ecef' : 'white',
+        cursor: readOnly ? 'not-allowed' : 'auto'
+      }}
+    />
+  </div>
+);
+
+const TotalsRow = ({ label, value }) => (
+  <div style={styles.totalsRow}>
+    <span style={{ color: '#166534', fontWeight: '600', fontSize: '0.95rem' }}>{label}</span>
+    <span style={{ color: '#166534', fontWeight: '600', fontSize: '1rem' }}>{value}</span>
+  </div>
+);
+
+// --- Styles Object ---
+
+const styles = {
+  page: { minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '2rem 1rem', fontFamily: 'system-ui, -apple-system, sans-serif' },
+  container: { maxWidth: '1200px', margin: '0 auto', background: 'white', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' },
+  header: { background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '2rem', textAlign: 'center' },
+  headerTitle: { margin: 0, fontSize: '2rem', fontWeight: '700', color: 'white', letterSpacing: '0.5px' },
+  headerSubtitle: { margin: '0.5rem 0 0 0', color: 'rgba(255,255,255,0.9)', fontSize: '0.95rem' },
+  content: { padding: '2rem' },
+  card: { marginBottom: '2rem', padding: '1.25rem', background: '#f8f9fa', borderRadius: '12px', border: '2px solid #e9ecef' },
+  cardTitle: { margin: '0 0 1rem 0', fontSize: '1.2rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.5rem' },
+  label: { display: 'block', fontSize: '0.85rem', fontWeight: '600', color: '#495057', marginBottom: '0.5rem' },
+  input: { width: '100%', padding: '0.75rem', border: '2px solid #dee2e6', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }, // Added boxSizing
+  sellerCard: { background: '#fff8f0', padding: '1.5rem', borderRadius: '12px', border: '2px solid #ffedd5' },
+  buyerCard: { background: '#f0f9ff', padding: '1.5rem', borderRadius: '12px', border: '2px solid #bae6fd' },
+  formGrid: { display: 'flex', flexDirection: 'column', gap: '1rem' },
+  formLabel: (theme) => ({
+    display: 'block', fontSize: '0.8rem', fontWeight: '600', marginBottom: '0.4rem',
+    color: theme === 'orange' ? '#7c2d12' : '#075985'
+  }),
+  formInput: (theme) => ({
+    width: '100%', padding: '0.7rem', borderRadius: '8px', fontSize: '0.9rem',
+    border: `2px solid ${theme === 'orange' ? '#fed7aa' : '#7dd3fc'}`,
+    background: 'white',
+    boxSizing: 'border-box' // Added boxSizing
+  }),
+  tableWrapper: { overflowX: 'auto', borderRadius: '12px', border: '2px solid #e5e7eb' },
+  table: { width: '100%', borderCollapse: 'collapse', background: 'white' },
+  tableHeaderRow: { background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
+  tableHeader: { padding: '1rem 0.75rem', textAlign: 'left', color: 'white', fontSize: '0.85rem', fontWeight: '600', whiteSpace: 'nowrap' },
+  tableBodyRow: (index) => ({ borderBottom: '1px solid #e5e7eb', background: index % 2 === 0 ? '#fafafa' : 'white' }),
+  tableCell: { padding: '0.75rem' },
+  tableInput: { width: '100%', padding: '0.6rem', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '0.9rem', boxSizing: 'border-box' }, // Added boxSizing
+  deleteItemButton: { background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', width: '32px', height: '32px', cursor: 'pointer', fontSize: '1rem', fontWeight: 'bold' },
+  totalsCard: { background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', padding: '1.5rem', borderRadius: '12px', border: '2px solid #86efac' },
+  totalsRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0', borderBottom: '1px solid #bbf7d0' },
+  
+  // Button Base Styles
+  button: {
+    border: 'none', padding: '0.75rem 1.5rem', borderRadius: '8px',
+    fontSize: '0.95rem', fontWeight: '600', cursor: 'pointer',
+    transition: 'all 0.2s ease',
+  },
+  // Button Color Variants
+  primary: { background: '#3b82f6', color: 'white' },
+  secondary: { background: '#5a67d8', color: 'white' },
+  danger: { background: '#ef4444', color: 'white' },
+  success: { background: '#22c55e', color: 'white' },
+  generateButton: {
+    width: '100%',
+    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+    color: 'white',
+    padding: '1.25rem',
+    borderRadius: '12px',
+    fontSize: '1.1rem',
+    fontWeight: '700',
+    boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)',
+    transition: 'all 0.3s ease'
+  }
+};
 
 export default App;
