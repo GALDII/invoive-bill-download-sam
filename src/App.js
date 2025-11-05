@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 const generateInvoiceNumber = () => {
   const today = new Date();
   const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, '0'); // January is 0!
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
   const dd = String(today.getDate()).padStart(2, '0');
   const hh = String(today.getHours()).padStart(2, '0');
   const min = String(today.getMinutes()).padStart(2, '0');
@@ -15,7 +15,6 @@ const generateInvoiceNumber = () => {
   
   return `INV-${yyyy}${mm}${dd}-${hh}${min}${ss}`;
 };
-
 
 // --- Main App Component ---
 function App() {
@@ -40,7 +39,7 @@ function App() {
   };
   
   const invoicePlaceholders = {
-    number: 'INV-20251104-123000', // Fallback
+    number: 'INV-20251104-123000',
   };
 
   // Form States
@@ -53,13 +52,13 @@ function App() {
   });
   
   const [invoiceDetails, setInvoiceDetails] = useState({
-    number: generateInvoiceNumber(), // Auto-generate on load
+    number: generateInvoiceNumber(),
     date: new Date().toISOString().split('T')[0],
     reverseCharge: 'NO',
   });
 
   const [items, setItems] = useState([
-    { description: '2/60polyester yarn', hsn: '55092200', quantity: 60, unit: '1', rate: 230.0, gstRate: 5 },
+    { description: '2/60polyester yarn', hsn: '55092200', quantity: 60, rate: 230.0, gstRate: 5 },
   ]);
 
   // Customer Management States
@@ -119,7 +118,6 @@ function App() {
     }
   }, []);
 
-
   // --- Item Handlers ---
   const handleItemChange = (index, field, value) => {
     const newItems = [...items];
@@ -133,7 +131,7 @@ function App() {
   };
 
   const addItem = () => {
-    setItems([...items, { description: '', hsn: '', quantity: 1, unit: '1', rate: 0, gstRate: 5 }]);
+    setItems([...items, { description: '', hsn: '', quantity: 1, rate: 0, gstRate: 5 }]);
   };
   
   const removeItem = (index) => {
@@ -159,44 +157,37 @@ function App() {
 
   // --- Customer Management Handlers ---
 
-  /** Resets the buyer form to be empty and editable */
   const clearBuyerFields = () => {
     setBuyerDetails({ name: '', address: '', gstin: '', state: '', stateCode: '' });
     setIsBuyerEditable(true);
   };
 
-  /** Handles selecting a customer from the dropdown */
   const handleCustomerSelect = (e) => {
     const customerName = e.target.value;
     setSelectedCustomer(customerName);
 
     if (customerName === "") {
-      // "Select Existing Customer" was chosen
       clearBuyerFields();
       localStorage.removeItem('lastSelectedCustomer');
     } else {
-      // Find the customer and fill details
       const customer = savedCustomers.find(c => c.name === customerName);
       if (customer) {
         setBuyerDetails(customer);
-        setIsBuyerEditable(false); // Make fields read-only
+        setIsBuyerEditable(false);
         localStorage.setItem('lastSelectedCustomer', customer.name);
       }
     }
   };
 
-  /** Handles clicking the "Add New Customer" button */
   const handleAddNewCustomer = () => {
-    setSelectedCustomer(''); // Reset dropdown
-    clearBuyerFields(); // Clear fields and make editable
+    setSelectedCustomer('');
+    clearBuyerFields();
     localStorage.removeItem('lastSelectedCustomer');
   };
 
-  /** Handles saving the current buyer details to local storage */
   const handleSaveCustomer = () => {
     const { name, address, gstin, state, stateCode } = buyerDetails;
 
-    // Validation
     if (name.trim() === '') {
       alert('Customer Name cannot be empty.');
       return;
@@ -213,20 +204,17 @@ function App() {
       state: state.trim(),
       stateCode: stateCode.trim()
     };
-    const updatedCustomers = [...savedCustomers, newCustomer].sort((a, b) => a.name.localeCompare(b.name)); // Keep list sorted
+    const updatedCustomers = [...savedCustomers, newCustomer].sort((a, b) => a.name.localeCompare(b.name));
 
-    // Update state and local storage
     setSavedCustomers(updatedCustomers);
     localStorage.setItem('savedCustomers', JSON.stringify(updatedCustomers));
     
-    // Post-save actions
-    setSelectedCustomer(newCustomer.name); // Auto-select new customer
-    setIsBuyerEditable(false); // Make fields read-only
+    setSelectedCustomer(newCustomer.name);
+    setIsBuyerEditable(false);
     localStorage.setItem('lastSelectedCustomer', newCustomer.name);
     alert('Customer saved successfully!');
   };
 
-  /** Deletes the currently selected customer */
   const handleDeleteCustomer = () => {
     if (!selectedCustomer) {
       alert("Please select a customer to delete.");
@@ -239,16 +227,14 @@ function App() {
       setSavedCustomers(updatedCustomers);
       localStorage.setItem('savedCustomers', JSON.stringify(updatedCustomers));
       
-      // Clear last selected if it was the one deleted
       if (localStorage.getItem('lastSelectedCustomer') === selectedCustomer) {
         localStorage.removeItem('lastSelectedCustomer');
       }
 
-      handleAddNewCustomer(); // Reset form
+      handleAddNewCustomer();
       alert('Customer deleted.');
     }
   };
-
 
   // --- PDF Generation ---
   const generatePDF = () => {
@@ -264,7 +250,11 @@ function App() {
     const margin = 14;
     const center = pageWidth / 2;
 
-    // Use state value OR placeholder if state is empty
+    // --- Page Border ---
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.5);
+    doc.rect(5, 5, pageWidth - 10, pageHeight - 10);
+
     const pdfSeller = {
       name: sellerDetails.name || sellerPlaceholders.name,
       address: sellerDetails.address || sellerPlaceholders.address,
@@ -315,10 +305,7 @@ function App() {
     doc.text(gstinText, gstinX, margin + 14);
     
     const stateCodeX = gstinX + gstinTextWidth + 5;
-    doc.setDrawColor(150, 150, 150);
-    doc.setLineWidth(0.2);
-    doc.rect(stateCodeX, margin + 11, stateCodeTextWidth + 4, 5);
-    doc.text(stateCodeText, stateCodeX + 2, margin + 14);
+    doc.text(stateCodeText, stateCodeX, margin + 14);
     
     doc.setLineWidth(0.5);
     doc.line(margin, margin + 18, pageWidth - margin, margin + 18);
@@ -355,23 +342,28 @@ function App() {
     let leftY = y + 10 + (buyerAddress.length * 4);
     doc.text(`GSTIN: ${pdfBuyer.gstin}`, col1, leftY + 5);
     doc.text(`State: ${pdfBuyer.state}`, col1, leftY + 10);
-    const buyerStateText = `State Code : ${pdfBuyer.stateCode}`;
-    const buyerStateX = col1 + doc.getTextWidth(`State: ${pdfBuyer.state}  `);
-    doc.rect(buyerStateX, leftY + 7, doc.getTextWidth(buyerStateText) + 4, 5);
-    doc.text(buyerStateText, buyerStateX + 2, leftY + 10);
+    doc.text(`State Code : ${pdfBuyer.stateCode}`, col1, leftY + 15);
 
     // 4b. Top Right (Invoice Info)
-    doc.setFont('helvetica', 'bold'); doc.text('Invoice Number', keyX, y); 
-    doc.setFont('helvetica', 'normal'); doc.text(pdfInvoice.number, valueX, y);
+    doc.setFont('helvetica', 'bold'); 
+    doc.text('Invoice Number', keyX, y); 
+    doc.setFont('helvetica', 'normal'); 
+    doc.text(pdfInvoice.number, valueX, y);
     
-    doc.setFont('helvetica', 'bold'); doc.text('Invoice Date', keyX, y + 5); 
-    doc.setFont('helvetica', 'normal'); doc.text(pdfInvoice.date, valueX, y + 5);
+    doc.setFont('helvetica', 'bold'); 
+    doc.text('Invoice Date', keyX, y + 5); 
+    doc.setFont('helvetica', 'normal'); 
+    doc.text(pdfInvoice.date, valueX, y + 5);
     
-    doc.setFont('helvetica', 'bold'); doc.text('State', keyX, y + 10); 
-    doc.setFont('helvetica', 'normal'); doc.text(pdfSeller.state, valueX, y + 10);
+    doc.setFont('helvetica', 'bold'); 
+    doc.text('State', keyX, y + 10); 
+    doc.setFont('helvetica', 'normal'); 
+    doc.text(pdfSeller.state, valueX, y + 10);
     
-    doc.setFont('helvetica', 'bold'); doc.text('Reverse Charge', keyX, y + 15); 
-    doc.setFont('helvetica', 'normal'); doc.text(pdfInvoice.reverseCharge, valueX, y + 15);
+    doc.setFont('helvetica', 'bold'); 
+    doc.text('Reverse Charge', keyX, y + 15); 
+    doc.setFont('helvetica', 'normal'); 
+    doc.text(pdfInvoice.reverseCharge, valueX, y + 15);
     
     // 4c. Right Column (Consignee / Shipped To)
     let y2 = y + 25; 
@@ -384,20 +376,16 @@ function App() {
     let rightY = y2 + 10 + (consigneeAddress.length * 4);
     doc.text(`GSTIN: ${pdfBuyer.gstin}`, keyX, rightY + 5);
     doc.text(`State: ${pdfBuyer.state}`, keyX, rightY + 10);
-    const conStateText = `State Code : ${pdfBuyer.stateCode}`;
-    const conStateX = keyX + doc.getTextWidth(`State: ${pdfBuyer.state}  `);
-    doc.rect(conStateX, rightY + 7, doc.getTextWidth(conStateText) + 4, 5);
-    doc.text(conStateText, conStateX + 2, rightY + 10);
+    doc.text(`State Code : ${pdfBuyer.stateCode}`, keyX, rightY + 15);
 
     // 5. Product Details Table
-    const tableStartY = Math.max(leftY, rightY) + 20; // Added extra 5mm spacing
+    const tableStartY = Math.max(leftY, rightY) + 20;
     const tableHead = [
         [
             { content: 'Sr. No.', rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
             { content: 'Name of Product', rowSpan: 2, styles: { valign: 'middle' } },
             { content: 'HSN/SAC', rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
             { content: 'QTY', rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
-            { content: 'Unit', rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
             { content: 'Rate', rowSpan: 2, styles: { halign: 'right', valign: 'middle' } },
             { content: 'Taxable Value', rowSpan: 2, styles: { halign: 'right', valign: 'middle' } },
             { content: 'CGST', colSpan: 2, styles: { halign: 'center' } },
@@ -405,8 +393,10 @@ function App() {
             { content: 'Total', rowSpan: 2, styles: { halign: 'right', valign: 'middle' } },
         ],
         [
-            { content: 'Rate', styles: { halign: 'right' } }, { content: 'Amount', styles: { halign: 'right' } },
-            { content: 'Rate', styles: { halign: 'right' } }, { content: 'Amount', styles: { halign: 'right' } },
+            { content: 'Rate', styles: { halign: 'right' } }, 
+            { content: 'Amount', styles: { halign: 'right' } },
+            { content: 'Rate', styles: { halign: 'right' } }, 
+            { content: 'Amount', styles: { halign: 'right' } },
         ]
     ];
     
@@ -420,7 +410,7 @@ function App() {
         const itemTotal = taxableValue + cgstAmount + sgstAmount;
         
         tableBody.push([
-            index + 1, item.description, item.hsn, item.quantity, item.unit,
+            index + 1, item.description, item.hsn, item.quantity,
             `₹ ${item.rate.toFixed(2)}`, `₹ ${taxableValue.toFixed(2)}`,
             `${cgstRate.toFixed(2)}%`, `₹ ${cgstAmount.toFixed(2)}`,
             `${sgstRate.toFixed(2)}%`, `₹ ${sgstAmount.toFixed(2)}`,
@@ -429,32 +419,49 @@ function App() {
     });
     
     const totalQty = items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+    
     tableBody.push([
         { content: 'Total', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } },
-        { content: totalQty, styles: { fontStyle: 'bold', halign: 'center' } }, '', '', 
-        { content: `₹ ${totals.subtotal.toFixed(2)}`, styles: { fontStyle: 'bold', halign: 'right' } }, '', 
-        { content: `₹ ${totals.totalCgst.toFixed(2)}`, styles: { fontStyle: 'bold', halign: 'right' } }, '', 
+        { content: totalQty, styles: { fontStyle: 'bold', halign: 'center' } },
+        { content: '', styles: { fontStyle: 'bold', halign: 'right' } },
+        { content: `₹ ${totals.subtotal.toFixed(2)}`, styles: { fontStyle: 'bold', halign: 'right' } },
+        '',
+        { content: `₹ ${totals.totalCgst.toFixed(2)}`, styles: { fontStyle: 'bold', halign: 'right' } },
+        '',
         { content: `₹ ${totals.totalSgst.toFixed(2)}`, styles: { fontStyle: 'bold', halign: 'right' } },
         { content: `₹ ${totals.grandTotal.toFixed(2)}`, styles: { fontStyle: 'bold', halign: 'right' } }
     ]);
     
     doc.autoTable({
-        head: tableHead, body: tableBody, startY: tableStartY, theme: 'grid',
-        headStyles: { fillColor: [232, 241, 252], textColor: 0, fontSize: 8, lineWidth: 0.1, lineColor: [150, 150, 150] },
-        styles: { fontSize: 8, lineWidth: 0.1, lineColor: [150, 150, 150], cellPadding: 1.5 },
+        head: tableHead, 
+        body: tableBody, 
+        startY: tableStartY, 
+        theme: 'grid',
+        headStyles: { 
+          fillColor: [232, 241, 252], 
+          textColor: 0, 
+          fontSize: 8, 
+          lineWidth: 0.1, 
+          lineColor: [150, 150, 150] 
+        },
+        styles: { 
+          fontSize: 8, 
+          lineWidth: 0.1, 
+          lineColor: [150, 150, 150], 
+          cellPadding: 1.5 
+        },
         columnStyles: {
-            0: { halign: 'center', cellWidth: 10 }, // Sr. No.
-            1: { cellWidth: 35 }, // Name of Product
-            2: { halign: 'center' }, // HSN
-            3: { halign: 'center', cellWidth: 10 }, // QTY
-            4: { halign: 'center', cellWidth: 10 }, // Unit
-            5: { halign: 'right' }, // Rate
-            6: { halign: 'right' }, // Taxable
-            7: { halign: 'right', cellWidth: 12 }, // CGST Rate
-            8: { halign: 'right' }, // CGST Amt
-            9: { halign: 'right', cellWidth: 12 }, // SGST Rate
-            10: { halign: 'right' }, // SGST Amt
-            11: { halign: 'right' }, // Total
+            0: { halign: 'center', cellWidth: 10 },
+            1: { cellWidth: 35 },
+            2: { halign: 'center' },
+            3: { halign: 'center', cellWidth: 10 },
+            4: { halign: 'right' },
+            5: { halign: 'right' },
+            6: { halign: 'right', cellWidth: 12 },
+            7: { halign: 'right' },
+            8: { halign: 'right', cellWidth: 12 },
+            9: { halign: 'right' },
+            10: { halign: 'right' },
         },
         didDrawCell: (data) => {
             if (data.row.index === tableBody.length - 1) {
@@ -464,68 +471,87 @@ function App() {
         }
     });
     
-    // 6. Final Amounts & Footer
+    // 6. Final Amounts & Footer Section
     let finalY = doc.autoTable.previous.finalY;
-    let newY = finalY + 8;
+    let footerStartY = finalY + 5;
     
+    const leftColWidth = (pageWidth - (margin * 2)) / 2;
+    const rightColWidth = (pageWidth - (margin * 2)) / 2;
+    
+    const amountInWords = "Fourteen Thousand Four Hundred Ninety Rupees Only /-";
+    const wrappedLines = doc.splitTextToSize(amountInWords, leftColWidth - 4);
+    const textHeight = 5 + (wrappedLines.length * 4) + 2;
+    
+    const summaryTableHeight = 32;
+    const containerHeight = Math.max(textHeight, summaryTableHeight);
+    
+    doc.setDrawColor(150, 150, 150);
+    doc.setLineWidth(0.1);
+    doc.rect(margin, footerStartY, pageWidth - (margin * 2), containerHeight);
+    doc.line(center, footerStartY, center, footerStartY + containerHeight);
+    
+    // LEFT SIDE - Amount in words
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
-    doc.text('Total Invoice Amount in words', margin, newY);
+    doc.text('Total Invoice Amount in words', margin + 2, footerStartY + 5);
     doc.setFont('helvetica', 'normal');
-
-    // --- Text Wrapping FIX ---
-    const leftColumnWidth = (pageWidth / 2) - margin - 5; // Width for the left side
-    // TODO: This should be made dynamic from totals.grandTotal
-    const amountInWords = "Fourteen Thousand Four Hundred Ninety Rupees Only /-"; 
-    const wrappedText = doc.splitTextToSize(amountInWords, leftColumnWidth);
-    doc.text(wrappedText, margin, newY + 5);
-    // --- End of Text Wrapping FIX ---
+    doc.text(wrappedLines, margin + 2, footerStartY + 10);
     
-    const summaryTableWidth = (pageWidth / 2) - margin - 10;
+    // RIGHT SIDE - Summary Table
     doc.autoTable({
         body: [
             ['Total Amount Before Tax', `₹ ${totals.subtotal.toFixed(2)}`],
             ['Add : CGST', `₹ ${totals.totalCgst.toFixed(2)}`],
             ['Add : SGST', `₹ ${totals.totalSgst.toFixed(2)}`],
-            [{ content: 'Total Tax Amount', styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }, { content: `₹ ${totals.totalTax.toFixed(2)}`, styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }],
-            [{ content: 'Final Invoice Amount', styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }, { content: `₹ ${totals.grandTotal.toFixed(2)}`, styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }],
+            [
+              { content: 'Total Tax Amount', styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }, 
+              { content: `₹ ${totals.totalTax.toFixed(2)}`, styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }
+            ],
+            [
+              { content: 'Final Invoice Amount', styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }, 
+              { content: `₹ ${totals.grandTotal.toFixed(2)}`, styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }
+            ],
             ['Balance Due', `₹ ${totals.grandTotal.toFixed(2)}`]
         ],
-        startY: newY - 2, tableWidth: summaryTableWidth, startX: pageWidth / 2 + 10, theme: 'grid',
-        styles: { fontSize: 9, cellPadding: 2, lineWidth: 0.1, lineColor: [150, 150, 150] },
-        columnStyles: { 0: { halign: 'left', cellWidth: summaryTableWidth * 0.6 }, 1: { halign: 'right', cellWidth: summaryTableWidth * 0.4 } },
-        didDrawCell: (data) => {
-            data.cell.styles.lineWidth = 0;
-            doc.setDrawColor(150, 150, 150);
-            doc.setLineWidth(0.1);
-            doc.line(data.cell.x, data.cell.y + data.cell.height, data.cell.x + data.cell.width, data.cell.y + data.cell.height);
-        }
+        startY: footerStartY + 1,
+        margin: { left: center + 1 },
+        tableWidth: rightColWidth - 2,
+        theme: 'grid',
+        styles: { 
+          fontSize: 9, 
+          cellPadding: 2, 
+          lineWidth: 0.1, 
+          lineColor: [150, 150, 150] 
+        },
+        columnStyles: { 
+            0: { halign: 'left', cellWidth: (rightColWidth - 2) * 0.6 }, 
+            1: { halign: 'right', cellWidth: (rightColWidth - 2) * 0.4 } 
+        },
     });
+
+    // 7. Terms & Signature - MOVED DOWN BY 10-15mm
+    let bottomY = footerStartY + containerHeight + 15; // Increased from 10 to 15
     
-    // 7. Terms & Signature
-    let summaryTableY = doc.autoTable.previous.finalY;
-    // Check which element is lower: the wrapped text or the summary table
-    let textHeight = (wrappedText.length * 4); // Estimate height of wrapped text
-    let leftBottomY = newY + 5 + textHeight;
-    let bottomY = Math.max(leftBottomY, summaryTableY) + 10;
-    
-    if (bottomY > pageHeight - 30) {
+    if (bottomY > pageHeight - 35) {
         doc.addPage();
+        doc.setDrawColor(0, 0, 0); 
+        doc.setLineWidth(0.5);
+        doc.rect(5, 5, pageWidth - 10, pageHeight - 10);
         bottomY = margin;
     }
 
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
-    doc.text('Terms And Conditions', margin, bottomY);
+    doc.text('Terms And Conditions', margin, bottomY+10);
     doc.setFont('helvetica', 'normal');
-    doc.text('1. This is an electronically generated document.', margin, bottomY + 4);
-    doc.text('2. All disputes are subject to Tiruppur jurisdiction.', margin, bottomY + 8);
+    doc.text('1. This is an electronically generated document.', margin, bottomY + 14);
+    doc.text('2. All disputes are subject to Tiruppur jurisdiction.', margin, bottomY + 18);
 
     doc.setFont('helvetica', 'normal');
-    doc.text('Certified that the particular given above are true and correct for,', pageWidth - margin, bottomY, { align: 'right' });
+    doc.text('Certified that the particular given above are true and correct for,', pageWidth - margin, bottomY+10, { align: 'right' });
     doc.setFont('helvetica', 'bold');
-    doc.text(`For, ${pdfSeller.name}`, pageWidth - margin, bottomY + 6, { align: 'right' });
-    doc.text('Authorised Signatory', pageWidth - margin, bottomY + 20, { align: 'right' });
+    doc.text(`For, ${pdfSeller.name}`, pageWidth - margin, bottomY + 16, { align: 'right' });
+    doc.text('Authorised Signatory', pageWidth - margin, bottomY + 30, { align: 'right' });
 
     // 8. Bottom Footer Bar
     doc.setFillColor(248, 249, 250); 
@@ -556,12 +582,22 @@ function App() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' }}>
               <div>
                 <label style={styles.label}>Invoice Number</label>
-                <input 
-                  type="text" 
-                  value={invoiceDetails.number}
-                  readOnly // Generated automatically
-                  style={{...styles.input, fontWeight: '600', color: '#667eea', background: '#e9ecef', cursor: 'not-allowed'}}
-                />
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input 
+                    type="text" 
+                    value={invoiceDetails.number}
+                    onChange={(e) => setInvoiceDetails({...invoiceDetails, number: e.target.value})}
+                    style={{...styles.input, flex: 1}}
+                    placeholder="Enter invoice number"
+                  />
+                  <button
+                    onClick={() => setInvoiceDetails({...invoiceDetails, number: generateInvoiceNumber()})}
+                    style={{...styles.button, ...styles.secondary, padding: '0.75rem 1rem', whiteSpace: 'nowrap'}}
+                    title="Generate new invoice number"
+                  >
+                    🔄 Auto
+                  </button>
+                </div>
               </div>
               <div>
                 <label style={styles.label}>Invoice Date</label>
@@ -674,7 +710,7 @@ function App() {
                   label="GSTIN" 
                   value={buyerDetails.gstin} 
                   placeholder={buyerPlaceholders.gstin}
-                  onChange={(e) => setBuyerDetails({...buyerDetails, gstin: e.target.value})} 
+                  onChange={(e) => setBuyerDetails({...buyerDetails, gstin: e.target.value})}
                   theme="blue"
                   isMonospace={true}
                   readOnly={!isBuyerEditable}
@@ -717,7 +753,6 @@ function App() {
                     <th style={styles.tableHeader}>Item Description</th>
                     <th style={styles.tableHeader}>HSN/SAC</th>
                     <th style={styles.tableHeader}>Qty</th>
-                    <th style={styles.tableHeader}>Unit</th>
                     <th style={styles.tableHeader}>Rate (₹)</th>
                     <th style={styles.tableHeader}>GST %</th>
                     <th style={styles.tableHeader}>Total (₹)</th>
@@ -727,12 +762,48 @@ function App() {
                 <tbody>
                   {items.map((item, index) => (
                     <tr key={index} style={styles.tableBodyRow(index)}>
-                      <td style={styles.tableCell}><input type="text" value={item.description} onChange={(e) => handleItemChange(index, 'description', e.target.value)} placeholder="Item name" style={{...styles.tableInput, minWidth: '150px'}}/></td>
-                      <td style={styles.tableCell}><input type="text" value={item.hsn} onChange={(e) => handleItemChange(index, 'hsn', e.target.value)} placeholder="HSN" style={{...styles.tableInput, width: '110px', fontFamily: 'monospace'}}/></td>
-                      <td style={styles.tableCell}><input type="number" value={item.quantity} onChange={(e) => handleItemChange(index, 'quantity', e.target.value)} style={{...styles.tableInput, width: '80px', textAlign: 'center'}}/></td>
-                      <td style={styles.tableCell}><input type="text" value={item.unit} onChange={(e) => handleItemChange(index, 'unit', e.target.value)} style={{...styles.tableInput, width: '70px', textAlign: 'center'}}/></td>
-                      <td style={styles.tableCell}><input type="number" value={item.rate} onChange={(e) => handleItemChange(index, 'rate', e.target.value)} style={{...styles.tableInput, width: '100px', textAlign: 'right'}}/></td>
-                      <td style={styles.tableCell}><input type="number" value={item.gstRate} onChange={(e) => handleItemChange(index, 'gstRate', e.target.value)} style={{...styles.tableInput, width: '70px', textAlign: 'center'}}/></td>
+                      <td style={styles.tableCell}>
+                        <input 
+                          type="text" 
+                          value={item.description} 
+                          onChange={(e) => handleItemChange(index, 'description', e.target.value)} 
+                          placeholder="Item name" 
+                          style={{...styles.tableInput, minWidth: '150px'}}
+                        />
+                      </td>
+                      <td style={styles.tableCell}>
+                        <input 
+                          type="text" 
+                          value={item.hsn} 
+                          onChange={(e) => handleItemChange(index, 'hsn', e.target.value)} 
+                          placeholder="HSN" 
+                          style={{...styles.tableInput, width: '110px', fontFamily: 'monospace'}}
+                        />
+                      </td>
+                      <td style={styles.tableCell}>
+                        <input 
+                          type="number" 
+                          value={item.quantity} 
+                          onChange={(e) => handleItemChange(index, 'quantity', e.target.value)} 
+                          style={{...styles.tableInput, width: '80px', textAlign: 'center'}}
+                        />
+                      </td>
+                      <td style={styles.tableCell}>
+                        <input 
+                          type="number" 
+                          value={item.rate} 
+                          onChange={(e) => handleItemChange(index, 'rate', e.target.value)} 
+                          style={{...styles.tableInput, width: '100px', textAlign: 'right'}}
+                        />
+                      </td>
+                      <td style={styles.tableCell}>
+                        <input 
+                          type="number" 
+                          value={item.gstRate} 
+                          onChange={(e) => handleItemChange(index, 'gstRate', e.target.value)} 
+                          style={{...styles.tableInput, width: '70px', textAlign: 'center'}}
+                        />
+                      </td>
                       <td style={{...styles.tableCell, textAlign: 'right', fontWeight: '600', color: '#059669', fontSize: '0.95rem'}}>
                         ₹{((parseFloat(item.quantity) || 0) * (parseFloat(item.rate) || 0) * (1 + (parseFloat(item.gstRate) || 0) / 100)).toFixed(2)}
                       </td>
@@ -836,49 +907,169 @@ const TotalsRow = ({ label, value }) => (
 );
 
 // --- Styles Object ---
-
 const styles = {
-  page: { minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '2rem 1rem', fontFamily: 'system-ui, -apple-system, sans-serif' },
-  container: { maxWidth: '1200px', margin: '0 auto', background: 'white', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' },
-  header: { background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '2rem', textAlign: 'center' },
-  headerTitle: { margin: 0, fontSize: '2rem', fontWeight: '700', color: 'white', letterSpacing: '0.5px' },
-  headerSubtitle: { margin: '0.5rem 0 0 0', color: 'rgba(255,255,255,0.9)', fontSize: '0.95rem' },
+  page: { 
+    minHeight: '100vh', 
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
+    padding: '2rem 1rem', 
+    fontFamily: 'system-ui, -apple-system, sans-serif' 
+  },
+  container: { 
+    maxWidth: '1200px', 
+    margin: '0 auto', 
+    background: 'white', 
+    borderRadius: '16px', 
+    boxShadow: '0 20px 60px rgba(0,0,0,0.3)', 
+    overflow: 'hidden' 
+  },
+  header: { 
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
+    padding: '2rem', 
+    textAlign: 'center' 
+  },
+  headerTitle: { 
+    margin: 0, 
+    fontSize: '2rem', 
+    fontWeight: '700', 
+    color: 'white', 
+    letterSpacing: '0.5px' 
+  },
+  headerSubtitle: { 
+    margin: '0.5rem 0 0 0', 
+    color: 'rgba(255,255,255,0.9)', 
+    fontSize: '0.95rem' 
+  },
   content: { padding: '2rem' },
-  card: { marginBottom: '2rem', padding: '1.25rem', background: '#f8f9fa', borderRadius: '12px', border: '2px solid #e9ecef' },
-  cardTitle: { margin: '0 0 1rem 0', fontSize: '1.2rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.5rem' },
-  label: { display: 'block', fontSize: '0.85rem', fontWeight: '600', color: '#495057', marginBottom: '0.5rem' },
-  input: { width: '100%', padding: '0.75rem', border: '2px solid #dee2e6', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }, // Added boxSizing
-  sellerCard: { background: '#fff8f0', padding: '1.5rem', borderRadius: '12px', border: '2px solid #ffedd5' },
-  buyerCard: { background: '#f0f9ff', padding: '1.5rem', borderRadius: '12px', border: '2px solid #bae6fd' },
-  formGrid: { display: 'flex', flexDirection: 'column', gap: '1rem' },
+  card: { 
+    marginBottom: '2rem', 
+    padding: '1.25rem', 
+    background: '#f8f9fa', 
+    borderRadius: '12px', 
+    border: '2px solid #e9ecef' 
+  },
+  cardTitle: { 
+    margin: '0 0 1rem 0', 
+    fontSize: '1.2rem', 
+    fontWeight: '700', 
+    display: 'flex', 
+    alignItems: 'center', 
+    gap: '0.5rem' 
+  },
+  label: { 
+    display: 'block', 
+    fontSize: '0.85rem', 
+    fontWeight: '600', 
+    color: '#495057', 
+    marginBottom: '0.5rem' 
+  },
+  input: { 
+    width: '100%', 
+    padding: '0.75rem', 
+    border: '2px solid #dee2e6', 
+    borderRadius: '8px', 
+    fontSize: '0.95rem', 
+    boxSizing: 'border-box' 
+  },
+  sellerCard: { 
+    background: '#fff8f0', 
+    padding: '1.5rem', 
+    borderRadius: '12px', 
+    border: '2px solid #ffedd5' 
+  },
+  buyerCard: { 
+    background: '#f0f9ff', 
+    padding: '1.5rem', 
+    borderRadius: '12px', 
+    border: '2px solid #bae6fd' 
+  },
+  formGrid: { 
+    display: 'flex', 
+    flexDirection: 'column', 
+    gap: '1rem'
+  },
   formLabel: (theme) => ({
-    display: 'block', fontSize: '0.8rem', fontWeight: '600', marginBottom: '0.4rem',
+    display: 'block', 
+    fontSize: '0.8rem', 
+    fontWeight: '600', 
+    marginBottom: '0.4rem',
     color: theme === 'orange' ? '#7c2d12' : '#075985'
   }),
   formInput: (theme) => ({
-    width: '100%', padding: '0.7rem', borderRadius: '8px', fontSize: '0.9rem',
+    width: '100%', 
+    padding: '0.7rem', 
+    borderRadius: '8px', 
+    fontSize: '0.9rem',
     border: `2px solid ${theme === 'orange' ? '#fed7aa' : '#7dd3fc'}`,
     background: 'white',
-    boxSizing: 'border-box' // Added boxSizing
+    boxSizing: 'border-box'
   }),
-  tableWrapper: { overflowX: 'auto', borderRadius: '12px', border: '2px solid #e5e7eb' },
-  table: { width: '100%', borderCollapse: 'collapse', background: 'white' },
-  tableHeaderRow: { background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
-  tableHeader: { padding: '1rem 0.75rem', textAlign: 'left', color: 'white', fontSize: '0.85rem', fontWeight: '600', whiteSpace: 'nowrap' },
-  tableBodyRow: (index) => ({ borderBottom: '1px solid #e5e7eb', background: index % 2 === 0 ? '#fafafa' : 'white' }),
+  tableWrapper: { 
+    overflowX: 'auto', 
+    borderRadius: '12px', 
+    border: '2px solid #e5e7eb' 
+  },
+  table: { 
+    width: '100%', 
+    borderCollapse: 'collapse', 
+    background: 'white' 
+  },
+  tableHeaderRow: { 
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
+  },
+  tableHeader: { 
+    padding: '1rem 0.75rem', 
+    textAlign: 'left', 
+    color: 'white', 
+    fontSize: '0.85rem', 
+    fontWeight: '600', 
+    whiteSpace: 'nowrap' 
+  },
+  tableBodyRow: (index) => ({ 
+    borderBottom: '1px solid #e5e7eb', 
+    background: index % 2 === 0 ? '#fafafa' : 'white' 
+  }),
   tableCell: { padding: '0.75rem' },
-  tableInput: { width: '100%', padding: '0.6rem', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '0.9rem', boxSizing: 'border-box' }, // Added boxSizing
-  deleteItemButton: { background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', width: '32px', height: '32px', cursor: 'pointer', fontSize: '1rem', fontWeight: 'bold' },
-  totalsCard: { background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', padding: '1.5rem', borderRadius: '12px', border: '2px solid #86efac' },
-  totalsRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0', borderBottom: '1px solid #bbf7d0' },
-  
-  // Button Base Styles
+  tableInput: { 
+    width: '100%', 
+    padding: '0.6rem', 
+    border: '1px solid #d1d5db', 
+    borderRadius: '6px', 
+    fontSize: '0.9rem', 
+    boxSizing: 'border-box' 
+  },
+  deleteItemButton: { 
+    background: '#ef4444', 
+    color: 'white', 
+    border: 'none', 
+    borderRadius: '6px', 
+    width: '32px', 
+    height: '32px', 
+    cursor: 'pointer', 
+    fontSize: '1rem', 
+    fontWeight: 'bold' 
+  },
+  totalsCard: { 
+    background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', 
+    padding: '1.5rem', 
+    borderRadius: '12px', 
+    border: '2px solid #86efac' 
+  },
+  totalsRow: { 
+    display: 'flex', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    padding: '0.5rem 0', 
+    borderBottom: '1px solid #bbf7d0' 
+  },
   button: {
-    border: 'none', padding: '0.75rem 1.5rem', borderRadius: '8px',
-    fontSize: '0.95rem', fontWeight: '600', cursor: 'pointer',
+    border: 'none', 
+    padding: '0.75rem 1.5rem', 
+    borderRadius: '8px',
+    fontSize: '0.95rem', 
+    fontWeight: '600', 
+    cursor: 'pointer',
     transition: 'all 0.2s ease',
   },
-  // Button Color Variants
   primary: { background: '#3b82f6', color: 'white' },
   secondary: { background: '#5a67d8', color: 'white' },
   danger: { background: '#ef4444', color: 'white' },
