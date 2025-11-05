@@ -16,6 +16,101 @@ const generateInvoiceNumber = () => {
   return `INV-${yyyy}${mm}${dd}-${hh}${min}${ss}`;
 };
 
+/**
+* Converts a number to words (helper function for parts less than 1000)
+*/
+const convertBelowThousand = (num) => {
+  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+  const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+  if (num === 0) return '';
+  
+  let words = '';
+  
+  if (num >= 100) {
+    words += ones[Math.floor(num / 100)] + ' Hundred ';
+    num %= 100;
+  }
+  
+  if (num >= 20) {
+    words += tens[Math.floor(num / 10)] + ' ';
+    num %= 10;
+  } else if (num >= 10) {
+    words += teens[num - 10] + ' ';
+    return words.trim();
+  }
+  
+  if (num > 0) {
+    words += ones[num] + ' ';
+  }
+  
+  return words.trim();
+};
+
+/**
+* Converts a number to Indian words format with proper handling of decimals
+* Example: 18427.50 -> "Eighteen Thousand Four Hundred Twenty Seven Rupees and Fifty Paise Only"
+*/
+const convertAmountToWords = (amount) => {
+  if (amount === 0) return 'Zero Rupees Only';
+  
+  const rupees = Math.floor(amount);
+  const paise = Math.round((amount - rupees) * 100);
+  
+  let words = '';
+  
+  // Handle Crores (10,000,000)
+  if (rupees >= 10000000) {
+    words += convertBelowThousand(Math.floor(rupees / 10000000)) + ' Crore ';
+    const remainder = rupees % 10000000;
+    if (remainder > 0) {
+      words += convertAmountToWordsHelper(remainder);
+    }
+  } else {
+    words = convertAmountToWordsHelper(rupees);
+  }
+  
+  words = words.trim() + ' Rupees';
+  
+  // Add paise if present
+  if (paise > 0) {
+    words += ' and ' + convertBelowThousand(paise) + ' Paise';
+  }
+  
+  words += ' Only';
+  
+  return words;
+};
+
+/**
+* Helper function for converting rupees part (without "Rupees Only" suffix)
+*/
+const convertAmountToWordsHelper = (num) => {
+  if (num === 0) return '';
+  
+  let words = '';
+  
+  // Handle Lakhs (100,000)
+  if (num >= 100000) {
+    words += convertBelowThousand(Math.floor(num / 100000)) + ' Lakh ';
+    num %= 100000;
+  }
+  
+  // Handle Thousands (1,000)
+  if (num >= 1000) {
+    words += convertBelowThousand(Math.floor(num / 1000)) + ' Thousand ';
+    num %= 1000;
+  }
+  
+  // Handle remaining (0-999)
+  if (num > 0) {
+    words += convertBelowThousand(num);
+  }
+  
+  return words.trim();
+};
+
 // --- Main App Component ---
 function App() {
   // --- State Definitions ---
@@ -277,13 +372,6 @@ function App() {
       reverseCharge: invoiceDetails.reverseCharge
     };
     
-    // 1. Top Header Bar
-    doc.setFillColor(248, 249, 250); 
-    doc.rect(0, 0, pageWidth, 8, 'F');
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(108, 117, 125);
-    doc.text('A Thank-you for doing business with us', center, 5, { align: 'center' });
 
     // 2. Company Information (Seller)
     doc.setTextColor(0, 0, 0); 
@@ -471,66 +559,79 @@ function App() {
         }
     });
     
-    // 6. Final Amounts & Footer Section
-    let finalY = doc.autoTable.previous.finalY;
-    let footerStartY = finalY + 5;
-    
-    const leftColWidth = (pageWidth - (margin * 2)) / 2;
-    const rightColWidth = (pageWidth - (margin * 2)) / 2;
-    
-    const amountInWords = "Fourteen Thousand Four Hundred Ninety Rupees Only /-";
-    const wrappedLines = doc.splitTextToSize(amountInWords, leftColWidth - 4);
-    const textHeight = 5 + (wrappedLines.length * 4) + 2;
-    
-    const summaryTableHeight = 32;
-    const containerHeight = Math.max(textHeight, summaryTableHeight);
-    
-    doc.setDrawColor(150, 150, 150);
-    doc.setLineWidth(0.1);
-    doc.rect(margin, footerStartY, pageWidth - (margin * 2), containerHeight);
-    doc.line(center, footerStartY, center, footerStartY + containerHeight);
-    
-    // LEFT SIDE - Amount in words
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Total Invoice Amount in words', margin + 2, footerStartY + 5);
-    doc.setFont('helvetica', 'normal');
-    doc.text(wrappedLines, margin + 2, footerStartY + 10);
-    
-    // RIGHT SIDE - Summary Table
-    doc.autoTable({
-        body: [
-            ['Total Amount Before Tax', `Rs. ${totals.subtotal.toFixed(2)}`],
-            ['Add : CGST', `Rs. ${totals.totalCgst.toFixed(2)}`],
-            ['Add : SGST', `Rs. ${totals.totalSgst.toFixed(2)}`],
-            [
-              { content: 'Total Tax Amount', styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }, 
-              { content: `Rs. ${totals.totalTax.toFixed(2)}`, styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }
-            ],
-            [
-              { content: 'Final Invoice Amount', styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }, 
-              { content: `Rs. ${totals.grandTotal.toFixed(2)}`, styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }
-            ],
-            ['Balance Due', `Rs. ${totals.grandTotal.toFixed(2)}`]
-        ],
-        startY: footerStartY + 1,
-        margin: { left: center + 1 },
-        tableWidth: rightColWidth - 2,
-        theme: 'grid',
-        styles: { 
-          fontSize: 9, 
-          cellPadding: 2, 
-          lineWidth: 0.1, 
-          lineColor: [150, 150, 150] 
-        },
-        columnStyles: { 
-            0: { halign: 'left', cellWidth: (rightColWidth - 2) * 0.6 }, 
-            1: { halign: 'right', cellWidth: (rightColWidth - 2) * 0.4 } 
-        },
-    });
+    // 6. Final Amounts & Footer Section - PERFECT ALIGNMENT WITH TWO TABLES
+let finalY = doc.autoTable.previous.finalY;
+let footerStartY = finalY + 5;
 
-    // 7. Terms & Signature - MOVED DOWN BY 40mm (approximately 6-7 more lines)
-    let bottomY = footerStartY + containerHeight + 40;
+const leftColWidth = (pageWidth - (margin * 2)) / 2;
+const rightColWidth = (pageWidth - (margin * 2)) / 2;
+
+// Convert grand total to words
+const amountInWords = convertAmountToWords(totals.grandTotal);
+
+// LEFT SIDE - Amount in words as autoTable (for perfect alignment)
+doc.autoTable({
+    head: [[{ content: 'Total Invoice Amount in words', styles: { fontStyle: 'bold' } }]],
+    body: [[amountInWords]],
+    startY: footerStartY,
+    margin: { left: margin, right: center + 1 },
+    tableWidth: leftColWidth,
+    theme: 'grid',
+    styles: { 
+      fontSize: 9, 
+      cellPadding: 3,
+      lineWidth: 0.1, 
+      lineColor: [150, 150, 150],
+      minCellHeight: 35
+    },
+    headStyles: {
+      fillColor: [255, 255, 255],
+      textColor: 0,
+      fontStyle: 'bold'
+    },
+    bodyStyles: {
+      fillColor: [255, 255, 255],
+      textColor: 0
+    }
+});
+
+// RIGHT SIDE - Summary Table
+doc.autoTable({
+    body: [
+        ['Total Amount Before Tax', `Rs. ${totals.subtotal.toFixed(2)}`],
+        ['Add : CGST', `Rs. ${totals.totalCgst.toFixed(2)}`],
+        ['Add : SGST', `Rs. ${totals.totalSgst.toFixed(2)}`],
+        [
+          { content: 'Total Tax Amount', styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }, 
+          { content: `Rs. ${totals.totalTax.toFixed(2)}`, styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }
+        ],
+        [
+          { content: 'Final Invoice Amount', styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }, 
+          { content: `Rs. ${totals.grandTotal.toFixed(2)}`, styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }
+        ],
+        ['Balance Due', `Rs. ${totals.grandTotal.toFixed(2)}`]
+    ],
+    startY: footerStartY,
+    margin: { left: center + 1, right: margin },
+    tableWidth: rightColWidth,
+    theme: 'grid',
+    styles: { 
+      fontSize: 9, 
+      cellPadding: 2, 
+      lineWidth: 0.1, 
+      lineColor: [150, 150, 150] 
+    },
+    columnStyles: { 
+        0: { halign: 'left', cellWidth: rightColWidth * 0.6 }, 
+        1: { halign: 'right', cellWidth: rightColWidth * 0.4 } 
+    }
+});
+
+// Update the Y position for terms section
+const containerHeight = doc.autoTable.previous.finalY - footerStartY;
+
+    // 7. Terms & Signature
+    let bottomY = doc.autoTable.previous.finalY + 40;
     
     if (bottomY > pageHeight - 35) {
         doc.addPage();
@@ -553,13 +654,6 @@ function App() {
     doc.text(`For, ${pdfSeller.name}`, pageWidth - margin, bottomY + 6, { align: 'right' });
     doc.text('Authorised Signatory', pageWidth - margin, bottomY + 20, { align: 'right' });
 
-    // 8. Bottom Footer Bar
-    doc.setFillColor(248, 249, 250); 
-    doc.rect(0, pageHeight - 8, pageWidth, 8, 'F');
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(108, 117, 125);
-    doc.text('Thankyou for your business.', center, pageHeight - 4, { align: 'center' });
 
     // 9. Save PDF
     doc.save(`Invoice-${pdfInvoice.number}.pdf`);
@@ -838,6 +932,16 @@ function App() {
               >
                 {scriptsLoaded ? '📥 Generate PDF Invoice' : '⏳ Loading...'}
               </button>
+              
+              {/* Display Amount in Words */}
+              <div style={{ marginTop: '1rem', padding: '1rem', background: '#f0f9ff', borderRadius: '8px', border: '2px solid #bae6fd' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: '600', color: '#075985', marginBottom: '0.5rem' }}>
+                  Amount in Words:
+                </div>
+                <div style={{ fontSize: '0.95rem', fontWeight: '500', color: '#0c4a6e' }}>
+                  {convertAmountToWords(totals.grandTotal)}
+                </div>
+              </div>
             </div>
 
             {/* Totals Summary */}
