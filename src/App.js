@@ -411,10 +411,10 @@ function App() {
         
         tableBody.push([
             index + 1, item.description, item.hsn, item.quantity,
-            `₹ ${item.rate.toFixed(2)}`, `₹ ${taxableValue.toFixed(2)}`,
-            `${cgstRate.toFixed(2)}%`, `₹ ${cgstAmount.toFixed(2)}`,
-            `${sgstRate.toFixed(2)}%`, `₹ ${sgstAmount.toFixed(2)}`,
-            `₹ ${itemTotal.toFixed(2)}`,
+            `Rs. ${item.rate.toFixed(2)}`, `Rs. ${taxableValue.toFixed(2)}`,
+            `${cgstRate.toFixed(2)}%`, `Rs. ${cgstAmount.toFixed(2)}`,
+            `${sgstRate.toFixed(2)}%`, `Rs. ${sgstAmount.toFixed(2)}`,
+            `Rs. ${itemTotal.toFixed(2)}`,
         ]);
     });
     
@@ -424,12 +424,12 @@ function App() {
         { content: 'Total', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } },
         { content: totalQty, styles: { fontStyle: 'bold', halign: 'center' } },
         { content: '', styles: { fontStyle: 'bold', halign: 'right' } },
-        { content: `₹ ${totals.subtotal.toFixed(2)}`, styles: { fontStyle: 'bold', halign: 'right' } },
+        { content: `Rs. ${totals.subtotal.toFixed(2)}`, styles: { fontStyle: 'bold', halign: 'right' } },
         '',
-        { content: `₹ ${totals.totalCgst.toFixed(2)}`, styles: { fontStyle: 'bold', halign: 'right' } },
+        { content: `Rs. ${totals.totalCgst.toFixed(2)}`, styles: { fontStyle: 'bold', halign: 'right' } },
         '',
-        { content: `₹ ${totals.totalSgst.toFixed(2)}`, styles: { fontStyle: 'bold', halign: 'right' } },
-        { content: `₹ ${totals.grandTotal.toFixed(2)}`, styles: { fontStyle: 'bold', halign: 'right' } }
+        { content: `Rs. ${totals.totalSgst.toFixed(2)}`, styles: { fontStyle: 'bold', halign: 'right' } },
+        { content: `Rs. ${totals.grandTotal.toFixed(2)}`, styles: { fontStyle: 'bold', halign: 'right' } }
     ]);
     
     doc.autoTable({
@@ -500,18 +500,18 @@ function App() {
     // RIGHT SIDE - Summary Table
     doc.autoTable({
         body: [
-            ['Total Amount Before Tax', `₹ ${totals.subtotal.toFixed(2)}`],
-            ['Add : CGST', `₹ ${totals.totalCgst.toFixed(2)}`],
-            ['Add : SGST', `₹ ${totals.totalSgst.toFixed(2)}`],
+            ['Total Amount Before Tax', `Rs. ${totals.subtotal.toFixed(2)}`],
+            ['Add : CGST', `Rs. ${totals.totalCgst.toFixed(2)}`],
+            ['Add : SGST', `Rs. ${totals.totalSgst.toFixed(2)}`],
             [
               { content: 'Total Tax Amount', styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }, 
-              { content: `₹ ${totals.totalTax.toFixed(2)}`, styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }
+              { content: `Rs. ${totals.totalTax.toFixed(2)}`, styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }
             ],
             [
               { content: 'Final Invoice Amount', styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }, 
-              { content: `₹ ${totals.grandTotal.toFixed(2)}`, styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }
+              { content: `Rs. ${totals.grandTotal.toFixed(2)}`, styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }
             ],
-            ['Balance Due', `₹ ${totals.grandTotal.toFixed(2)}`]
+            ['Balance Due', `Rs. ${totals.grandTotal.toFixed(2)}`]
         ],
         startY: footerStartY + 1,
         margin: { left: center + 1 },
@@ -529,8 +529,8 @@ function App() {
         },
     });
 
-    // 7. Terms & Signature - MOVED DOWN BY 10-15mm
-    let bottomY = footerStartY + containerHeight + 15; // Increased from 10 to 15
+    // 7. Terms & Signature - MOVED DOWN BY 40mm (approximately 6-7 more lines)
+    let bottomY = footerStartY + containerHeight + 40;
     
     if (bottomY > pageHeight - 35) {
         doc.addPage();
@@ -542,16 +542,16 @@ function App() {
 
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
-    doc.text('Terms And Conditions', margin, bottomY+10);
+    doc.text('Terms And Conditions', margin, bottomY);
     doc.setFont('helvetica', 'normal');
-    doc.text('1. This is an electronically generated document.', margin, bottomY + 14);
-    doc.text('2. All disputes are subject to Tiruppur jurisdiction.', margin, bottomY + 18);
+    doc.text('1. This is an electronically generated document.', margin, bottomY + 4);
+    doc.text('2. All disputes are subject to Tiruppur jurisdiction.', margin, bottomY + 8);
 
     doc.setFont('helvetica', 'normal');
-    doc.text('Certified that the particular given above are true and correct for,', pageWidth - margin, bottomY+10, { align: 'right' });
+    doc.text('Certified that the particular given above are true and correct for,', pageWidth - margin, bottomY, { align: 'right' });
     doc.setFont('helvetica', 'bold');
-    doc.text(`For, ${pdfSeller.name}`, pageWidth - margin, bottomY + 16, { align: 'right' });
-    doc.text('Authorised Signatory', pageWidth - margin, bottomY + 30, { align: 'right' });
+    doc.text(`For, ${pdfSeller.name}`, pageWidth - margin, bottomY + 6, { align: 'right' });
+    doc.text('Authorised Signatory', pageWidth - margin, bottomY + 20, { align: 'right' });
 
     // 8. Bottom Footer Bar
     doc.setFillColor(248, 249, 250); 
