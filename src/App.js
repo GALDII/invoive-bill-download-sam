@@ -156,7 +156,7 @@ function App() {
     { description: '2/60polyester yarn', hsn: '55092200', quantity: 60, rate: 230.0, gstRate: 5 },
   ]);
 
-  // Customer Management States
+  // Customer Management States (in-memory only)
   const [savedCustomers, setSavedCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState('');
   const [isBuyerEditable, setIsBuyerEditable] = useState(true);
@@ -181,36 +181,6 @@ function App() {
       if (document.body.contains(jspdfScript)) document.body.removeChild(jspdfScript);
       if (document.body.contains(autoTableScript)) document.body.removeChild(autoTableScript);
     };
-  }, []);
-
-  // Effect to load customers and last-selected customer from localStorage on mount
-  useEffect(() => {
-    let customers = [];
-    try {
-      const customersFromStorage = localStorage.getItem('savedCustomers');
-      if (customersFromStorage) {
-        customers = JSON.parse(customersFromStorage);
-        setSavedCustomers(customers);
-      }
-    } catch (error) {
-      console.error("Failed to load customers from localStorage", error);
-      localStorage.removeItem('savedCustomers');
-    }
-
-    try {
-      const lastSelected = localStorage.getItem('lastSelectedCustomer');
-      if (lastSelected && customers.length > 0) {
-        const customer = customers.find(c => c.name === lastSelected);
-        if (customer) {
-          setBuyerDetails(customer);
-          setSelectedCustomer(customer.name);
-          setIsBuyerEditable(false);
-        }
-      }
-    } catch (error) {
-      console.error("Failed to load last selected customer", error);
-      localStorage.removeItem('lastSelectedCustomer');
-    }
   }, []);
 
   // --- Item Handlers ---
@@ -263,13 +233,11 @@ function App() {
 
     if (customerName === "") {
       clearBuyerFields();
-      localStorage.removeItem('lastSelectedCustomer');
     } else {
       const customer = savedCustomers.find(c => c.name === customerName);
       if (customer) {
         setBuyerDetails(customer);
         setIsBuyerEditable(false);
-        localStorage.setItem('lastSelectedCustomer', customer.name);
       }
     }
   };
@@ -277,7 +245,6 @@ function App() {
   const handleAddNewCustomer = () => {
     setSelectedCustomer('');
     clearBuyerFields();
-    localStorage.removeItem('lastSelectedCustomer');
   };
 
   const handleSaveCustomer = () => {
@@ -302,11 +269,9 @@ function App() {
     const updatedCustomers = [...savedCustomers, newCustomer].sort((a, b) => a.name.localeCompare(b.name));
 
     setSavedCustomers(updatedCustomers);
-    localStorage.setItem('savedCustomers', JSON.stringify(updatedCustomers));
     
     setSelectedCustomer(newCustomer.name);
     setIsBuyerEditable(false);
-    localStorage.setItem('lastSelectedCustomer', newCustomer.name);
     alert('Customer saved successfully!');
   };
 
@@ -320,11 +285,6 @@ function App() {
       const updatedCustomers = savedCustomers.filter(c => c.name !== selectedCustomer);
       
       setSavedCustomers(updatedCustomers);
-      localStorage.setItem('savedCustomers', JSON.stringify(updatedCustomers));
-      
-      if (localStorage.getItem('lastSelectedCustomer') === selectedCustomer) {
-        localStorage.removeItem('lastSelectedCustomer');
-      }
 
       handleAddNewCustomer();
       alert('Customer deleted.');
@@ -372,17 +332,19 @@ function App() {
       reverseCharge: invoiceDetails.reverseCharge
     };
     
-
-    // 2. Company Information (Seller)
+    // Company Information (Seller) - Starting at top
+    let currentY = 10;
     doc.setTextColor(0, 0, 0); 
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text(pdfSeller.name, center, margin + 4, { align: 'center' });
+    doc.text(pdfSeller.name, center, currentY, { align: 'center' });
     
+    currentY += 5;
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.text(pdfSeller.address, center, margin + 9, { align: 'center' });
+    doc.text(pdfSeller.address, center, currentY, { align: 'center' });
     
+    currentY += 5;
     const gstinText = `GSTIN : ${pdfSeller.gstin}`;
     const gstinTextWidth = doc.getTextWidth(gstinText);
     const stateCodeText = `State Code : ${pdfSeller.stateCode}`;
@@ -390,71 +352,73 @@ function App() {
     const totalWidth = gstinTextWidth + stateCodeTextWidth + 10; 
     const gstinX = center - (totalWidth / 2);
     
-    doc.text(gstinText, gstinX, margin + 14);
+    doc.text(gstinText, gstinX, currentY);
     
     const stateCodeX = gstinX + gstinTextWidth + 5;
-    doc.text(stateCodeText, stateCodeX, margin + 14);
+    doc.text(stateCodeText, stateCodeX, currentY);
     
+    currentY += 4;
     doc.setLineWidth(0.5);
-    doc.line(margin, margin + 18, pageWidth - margin, margin + 18);
+    doc.line(margin, currentY, pageWidth - margin, currentY);
     
-    // 3. Main Title ("TAX INVOICE")
+    // Main Title ("TAX INVOICE")
+    currentY += 3;
     doc.setFillColor(232, 241, 252); 
-    doc.rect(margin, margin + 21, pageWidth - (margin * 2), 10, 'F');
+    doc.rect(margin, currentY, pageWidth - (margin * 2), 10, 'F');
     
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(0, 0, 0);
-    doc.text('TAX INVOICE', center, margin + 27.5, { align: 'center' });
+    doc.text('TAX INVOICE', center, currentY + 6.5, { align: 'center' });
     
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    doc.text('Original For Recipient', pageWidth - margin - 2, margin + 27.5, { align: 'right' });
+    doc.text('Original For Recipient', pageWidth - margin - 2, currentY + 6.5, { align: 'right' });
     
-    let y = margin + 38; 
+    currentY += 17;
     
-    // 4. Invoice & Billing Details
+    // Invoice & Billing Details
     doc.setFontSize(9);
     const col1 = margin;
     const col2 = pageWidth / 2 + 5;
     const keyX = col2;
     const valueX = col2 + 35;
     
-    // 4a. Left Column (Receiver / Billed To)
+    // Left Column (Receiver / Billed To)
     doc.setFont('helvetica', 'bold');
-    doc.text('Details of Receiver | Billed to', col1, y);
+    doc.text('Details of Receiver | Billed to', col1, currentY);
     doc.setFont('helvetica', 'normal');
-    doc.text(pdfBuyer.name, col1, y + 5);
+    doc.text(pdfBuyer.name, col1, currentY + 5);
     const buyerAddress = doc.splitTextToSize(pdfBuyer.address, (pageWidth / 2) - 30);
-    doc.text(buyerAddress, col1, y + 10);
-    let leftY = y + 10 + (buyerAddress.length * 4);
+    doc.text(buyerAddress, col1, currentY + 10);
+    let leftY = currentY + 10 + (buyerAddress.length * 4);
     doc.text(`GSTIN: ${pdfBuyer.gstin}`, col1, leftY + 5);
     doc.text(`State: ${pdfBuyer.state}`, col1, leftY + 10);
     doc.text(`State Code : ${pdfBuyer.stateCode}`, col1, leftY + 15);
 
-    // 4b. Top Right (Invoice Info)
+    // Top Right (Invoice Info)
     doc.setFont('helvetica', 'bold'); 
-    doc.text('Invoice Number', keyX, y); 
+    doc.text('Invoice Number', keyX, currentY); 
     doc.setFont('helvetica', 'normal'); 
-    doc.text(pdfInvoice.number, valueX, y);
+    doc.text(pdfInvoice.number, valueX, currentY);
     
     doc.setFont('helvetica', 'bold'); 
-    doc.text('Invoice Date', keyX, y + 5); 
+    doc.text('Invoice Date', keyX, currentY + 5); 
     doc.setFont('helvetica', 'normal'); 
-    doc.text(pdfInvoice.date, valueX, y + 5);
+    doc.text(pdfInvoice.date, valueX, currentY + 5);
     
     doc.setFont('helvetica', 'bold'); 
-    doc.text('State', keyX, y + 10); 
+    doc.text('State', keyX, currentY + 10); 
     doc.setFont('helvetica', 'normal'); 
-    doc.text(pdfSeller.state, valueX, y + 10);
+    doc.text(pdfSeller.state, valueX, currentY + 10);
     
     doc.setFont('helvetica', 'bold'); 
-    doc.text('Reverse Charge', keyX, y + 15); 
+    doc.text('Reverse Charge', keyX, currentY + 15); 
     doc.setFont('helvetica', 'normal'); 
-    doc.text(pdfInvoice.reverseCharge, valueX, y + 15);
+    doc.text(pdfInvoice.reverseCharge, valueX, currentY + 15);
     
-    // 4c. Right Column (Consignee / Shipped To)
-    let y2 = y + 25; 
+    // Right Column (Consignee / Shipped To)
+    let y2 = currentY + 25; 
     doc.setFont('helvetica', 'bold');
     doc.text('Details of Consignee | Shipped to', keyX, y2);
     doc.setFont('helvetica', 'normal');
@@ -466,7 +430,7 @@ function App() {
     doc.text(`State: ${pdfBuyer.state}`, keyX, rightY + 10);
     doc.text(`State Code : ${pdfBuyer.stateCode}`, keyX, rightY + 15);
 
-    // 5. Product Details Table
+    // Product Details Table
     const tableStartY = Math.max(leftY, rightY) + 20;
     const tableHead = [
         [
@@ -559,7 +523,7 @@ function App() {
         }
     });
     
-    // 6. Final Amounts & Footer Section - PERFECT ALIGNMENT WITH TWO TABLES
+    // Final Amounts & Footer Section - PROFESSIONAL ALIGNMENT (FIXED)
 let finalY = doc.autoTable.previous.finalY;
 let footerStartY = finalY + 5;
 
@@ -569,33 +533,27 @@ const rightColWidth = (pageWidth - (margin * 2)) / 2;
 // Convert grand total to words
 const amountInWords = convertAmountToWords(totals.grandTotal);
 
-// LEFT SIDE - Amount in words as autoTable (for perfect alignment)
-doc.autoTable({
-    head: [[{ content: 'Total Invoice Amount in words', styles: { fontStyle: 'bold' } }]],
-    body: [[amountInWords]],
-    startY: footerStartY,
-    margin: { left: margin, right: center + 1 },
-    tableWidth: leftColWidth,
-    theme: 'grid',
-    styles: { 
-      fontSize: 9, 
-      cellPadding: 3,
-      lineWidth: 0.1, 
-      lineColor: [150, 150, 150],
-      minCellHeight: 35
-    },
-    headStyles: {
-      fillColor: [255, 255, 255],
-      textColor: 0,
-      fontStyle: 'bold'
-    },
-    bodyStyles: {
-      fillColor: [255, 255, 255],
-      textColor: 0
-    }
-});
+// Draw container and left side manually
+doc.setDrawColor(150, 150, 150);
+doc.setLineWidth(0.1);
+
+const containerHeight = 47;
+
+// Draw the main container
+doc.rect(margin, footerStartY, pageWidth - (margin * 2), containerHeight);
+doc.line(center, footerStartY, center, footerStartY + containerHeight);
+
+// LEFT SIDE - Amount in words with manual text rendering
+doc.setFontSize(9);
+doc.setFont('helvetica', 'bold');
+doc.text('Total Invoice Amount in words', margin + 2, footerStartY + 5);
+
+doc.setFont('helvetica', 'normal');
+const wrappedAmount = doc.splitTextToSize(amountInWords, leftColWidth - 4);
+doc.text(wrappedAmount, margin + 2, footerStartY + 11);
 
 // RIGHT SIDE - Summary Table
+const summaryStartY = footerStartY + 1;
 doc.autoTable({
     body: [
         ['Total Amount Before Tax', `Rs. ${totals.subtotal.toFixed(2)}`],
@@ -611,9 +569,9 @@ doc.autoTable({
         ],
         ['Balance Due', `Rs. ${totals.grandTotal.toFixed(2)}`]
     ],
-    startY: footerStartY,
-    margin: { left: center + 1, right: margin },
-    tableWidth: rightColWidth,
+    startY: summaryStartY,
+    margin: { left: center + 2, right: margin + 1 },
+    tableWidth: rightColWidth - 3,
     theme: 'grid',
     styles: { 
       fontSize: 9, 
@@ -622,43 +580,38 @@ doc.autoTable({
       lineColor: [150, 150, 150] 
     },
     columnStyles: { 
-        0: { halign: 'left', cellWidth: rightColWidth * 0.6 }, 
-        1: { halign: 'right', cellWidth: rightColWidth * 0.4 } 
+        0: { halign: 'left', cellWidth: (rightColWidth - 3) * 0.6 }, 
+        1: { halign: 'right', cellWidth: (rightColWidth - 3) * 0.4 } 
     }
 });
 
-// Update the Y position for terms section
-const containerHeight = doc.autoTable.previous.finalY - footerStartY;
+// Terms & Signature
+let bottomY = footerStartY + containerHeight + 15;
 
-    // 7. Terms & Signature
-    let bottomY = doc.autoTable.previous.finalY + 40;
-    
-    if (bottomY > pageHeight - 35) {
-        doc.addPage();
-        doc.setDrawColor(0, 0, 0); 
-        doc.setLineWidth(0.5);
-        doc.rect(5, 5, pageWidth - 10, pageHeight - 10);
-        bottomY = margin;
-    }
+if (bottomY > pageHeight - 35) {
+    doc.addPage();
+    doc.setDrawColor(0, 0, 0); 
+    doc.setLineWidth(0.5);
+    doc.rect(5, 5, pageWidth - 10, pageHeight - 10);
+    bottomY = margin;
+}
 
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Terms And Conditions', margin, bottomY);
-    doc.setFont('helvetica', 'normal');
-    doc.text('1. This is an electronically generated document.', margin, bottomY + 4);
-    doc.text('2. All disputes are subject to Tiruppur jurisdiction.', margin, bottomY + 8);
+doc.setFontSize(8);
+doc.setFont('helvetica', 'bold');
+doc.text('Terms And Conditions', margin, bottomY);
+doc.setFont('helvetica', 'normal');
+doc.text('1. This is an electronically generated document.', margin, bottomY + 4);
+doc.text('2. All disputes are subject to Tiruppur jurisdiction.', margin, bottomY + 8);
 
-    doc.setFont('helvetica', 'normal');
-    doc.text('Certified that the particular given above are true and correct for,', pageWidth - margin, bottomY, { align: 'right' });
-    doc.setFont('helvetica', 'bold');
-    doc.text(`For, ${pdfSeller.name}`, pageWidth - margin, bottomY + 6, { align: 'right' });
-    doc.text('Authorised Signatory', pageWidth - margin, bottomY + 20, { align: 'right' });
+doc.setFont('helvetica', 'normal');
+doc.text('Certified that the particular given above are true and correct for,', pageWidth - margin, bottomY, { align: 'right' });
+doc.setFont('helvetica', 'bold');
+doc.text(`For, ${pdfSeller.name}`, pageWidth - margin, bottomY + 6, { align: 'right' });
+doc.text('Authorised Signatory', pageWidth - margin, bottomY + 20, { align: 'right' });
 
-
-    // 9. Save PDF
-    doc.save(`Invoice-${pdfInvoice.number}.pdf`);
+// Save PDF
+doc.save(`Invoice-${pdfInvoice.number}.pdf`);
   };
-
   // --- JSX (HTML Structure) ---
   return (
     <div style={styles.page}>
