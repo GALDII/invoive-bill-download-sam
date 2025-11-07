@@ -214,8 +214,19 @@ function App() {
         totalCgst += gstAmount / 2;
         totalSgst += gstAmount / 2;
     });
-    const grandTotal = subtotal + totalCgst + totalSgst;
-    return { subtotal, totalCgst, totalSgst, grandTotal, totalTax: totalCgst + totalSgst };
+    const grandTotalBeforeRounding = subtotal + totalCgst + totalSgst;
+    const roundedGrandTotal = Math.round(grandTotalBeforeRounding);
+    const roundOffAmount = roundedGrandTotal - grandTotalBeforeRounding;
+    
+    return { 
+      subtotal, 
+      totalCgst, 
+      totalSgst, 
+      grandTotal: grandTotalBeforeRounding,
+      roundedGrandTotal,
+      roundOffAmount,
+      totalTax: totalCgst + totalSgst 
+    };
   };
   
   const totals = calculateTotals();
@@ -531,13 +542,13 @@ const leftColWidth = (pageWidth - (margin * 2)) / 2;
 const rightColWidth = (pageWidth - (margin * 2)) / 2;
 
 // Convert grand total to words
-const amountInWords = convertAmountToWords(totals.grandTotal);
+const amountInWords = convertAmountToWords(totals.roundedGrandTotal);
 
 // Draw container and left side manually
 doc.setDrawColor(150, 150, 150);
 doc.setLineWidth(0.1);
 
-const containerHeight = 47;
+const containerHeight = 55;
 
 // Draw the main container
 doc.rect(margin, footerStartY, pageWidth - (margin * 2), containerHeight);
@@ -563,11 +574,12 @@ doc.autoTable({
           { content: 'Total Tax Amount', styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }, 
           { content: `Rs. ${totals.totalTax.toFixed(2)}`, styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }
         ],
+        ['Round Off', `Rs. ${totals.roundOffAmount >= 0 ? '+' : ''}${totals.roundOffAmount.toFixed(2)}`],
         [
           { content: 'Final Invoice Amount', styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }, 
-          { content: `Rs. ${totals.grandTotal.toFixed(2)}`, styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }
+          { content: `Rs. ${totals.roundedGrandTotal.toFixed(2)}`, styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }
         ],
-        ['Balance Due', `Rs. ${totals.grandTotal.toFixed(2)}`]
+        ['Balance Due', `Rs. ${totals.roundedGrandTotal.toFixed(2)}`]
     ],
     startY: summaryStartY,
     margin: { left: center + 2, right: margin + 1 },
@@ -892,7 +904,7 @@ doc.save(`Invoice-${pdfInvoice.number}.pdf`);
                   Amount in Words:
                 </div>
                 <div style={{ fontSize: '0.95rem', fontWeight: '500', color: '#0c4a6e' }}>
-                  {convertAmountToWords(totals.grandTotal)}
+                  {convertAmountToWords(totals.roundedGrandTotal)}
                 </div>
               </div>
             </div>
@@ -903,9 +915,13 @@ doc.save(`Invoice-${pdfInvoice.number}.pdf`);
                 <TotalsRow label="Subtotal:" value={`₹${totals.subtotal.toFixed(2)}`} />
                 <TotalsRow label="CGST:" value={`₹${totals.totalCgst.toFixed(2)}`} />
                 <TotalsRow label="SGST:" value={`₹${totals.totalSgst.toFixed(2)}`} />
+                <TotalsRow 
+                  label="Round Off:" 
+                  value={`₹${totals.roundOffAmount >= 0 ? '+' : ''}${totals.roundOffAmount.toFixed(2)}`} 
+                />
                 <div style={{...styles.totalsRow, paddingTop: '0.75rem', marginTop: '0.5rem', borderTop: 'none'}}>
                   <span style={{ color: '#14532d', fontWeight: '700', fontSize: '1.2rem' }}>Grand Total:</span>
-                  <span style={{ color: '#15803d', fontWeight: '700', fontSize: '1.5rem' }}>₹{totals.grandTotal.toFixed(2)}</span>
+                  <span style={{ color: '#15803d', fontWeight: '700', fontSize: '1.5rem' }}>₹{totals.roundedGrandTotal.toFixed(2)}</span>
                 </div>
               </div>
             </div>
