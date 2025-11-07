@@ -157,7 +157,11 @@ function App() {
   ]);
 
   // Customer Management States (in-memory only)
-  const [savedCustomers, setSavedCustomers] = useState([]);
+  const [savedCustomers, setSavedCustomers] = useState(() => {
+    const localData = localStorage.getItem('invoiceAppCustomers');
+    return localData ? JSON.parse(localData) : [];
+  });
+
   const [selectedCustomer, setSelectedCustomer] = useState('');
   const [isBuyerEditable, setIsBuyerEditable] = useState(true);
 
@@ -182,6 +186,11 @@ function App() {
       if (document.body.contains(autoTableScript)) document.body.removeChild(autoTableScript);
     };
   }, []);
+
+  // Effect to save customers to localStorage whenever the list changes
+  useEffect(() => {
+    localStorage.setItem('invoiceAppCustomers', JSON.stringify(savedCustomers));
+  }, [savedCustomers]);
 
   // --- Item Handlers ---
   const handleItemChange = (index, field, value) => {
@@ -534,96 +543,97 @@ function App() {
         }
     });
     
-    // Final Amounts & Footer Section - PROFESSIONAL ALIGNMENT (FIXED)
-let finalY = doc.autoTable.previous.finalY;
-let footerStartY = finalY + 5;
+    // Final Amounts & Footer Section
+    let finalY = doc.autoTable.previous.finalY;
+    let footerStartY = finalY + 5;
 
-const leftColWidth = (pageWidth - (margin * 2)) / 2;
-const rightColWidth = (pageWidth - (margin * 2)) / 2;
+    const leftColWidth = (pageWidth - (margin * 2)) / 2;
+    const rightColWidth = (pageWidth - (margin * 2)) / 2;
 
-// Convert grand total to words
-const amountInWords = convertAmountToWords(totals.roundedGrandTotal);
+    // Convert grand total to words
+    const amountInWords = convertAmountToWords(totals.roundedGrandTotal);
 
-// Draw container and left side manually
-doc.setDrawColor(150, 150, 150);
-doc.setLineWidth(0.1);
+    // Draw container and left side manually
+    doc.setDrawColor(150, 150, 150);
+    doc.setLineWidth(0.1);
 
-const containerHeight = 55;
+    const containerHeight = 55;
 
-// Draw the main container
-doc.rect(margin, footerStartY, pageWidth - (margin * 2), containerHeight);
-doc.line(center, footerStartY, center, footerStartY + containerHeight);
+    // Draw the main container
+    doc.rect(margin, footerStartY, pageWidth - (margin * 2), containerHeight);
+    doc.line(center, footerStartY, center, footerStartY + containerHeight);
 
-// LEFT SIDE - Amount in words with manual text rendering
-doc.setFontSize(9);
-doc.setFont('helvetica', 'bold');
-doc.text('Total Invoice Amount in words', margin + 2, footerStartY + 5);
+    // LEFT SIDE - Amount in words with manual text rendering
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Total Invoice Amount in words', margin + 2, footerStartY + 5);
 
-doc.setFont('helvetica', 'normal');
-const wrappedAmount = doc.splitTextToSize(amountInWords, leftColWidth - 4);
-doc.text(wrappedAmount, margin + 2, footerStartY + 11);
+    doc.setFont('helvetica', 'normal');
+    const wrappedAmount = doc.splitTextToSize(amountInWords, leftColWidth - 4);
+    doc.text(wrappedAmount, margin + 2, footerStartY + 11);
 
-// RIGHT SIDE - Summary Table
-const summaryStartY = footerStartY + 1;
-doc.autoTable({
-    body: [
-        ['Total Amount Before Tax', `Rs. ${totals.subtotal.toFixed(2)}`],
-        ['Add : CGST', `Rs. ${totals.totalCgst.toFixed(2)}`],
-        ['Add : SGST', `Rs. ${totals.totalSgst.toFixed(2)}`],
-        [
-          { content: 'Total Tax Amount', styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }, 
-          { content: `Rs. ${totals.totalTax.toFixed(2)}`, styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }
+    // RIGHT SIDE - Summary Table
+    const summaryStartY = footerStartY + 1;
+    doc.autoTable({
+        body: [
+            ['Total Amount Before Tax', `Rs. ${totals.subtotal.toFixed(2)}`],
+            ['Add : CGST', `Rs. ${totals.totalCgst.toFixed(2)}`],
+            ['Add : SGST', `Rs. ${totals.totalSgst.toFixed(2)}`],
+            [
+              { content: 'Total Tax Amount', styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }, 
+              { content: `Rs. ${totals.totalTax.toFixed(2)}`, styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }
+            ],
+            ['Round Off', `Rs. ${totals.roundOffAmount >= 0 ? '+' : ''}${totals.roundOffAmount.toFixed(2)}`],
+            [
+              { content: 'Final Invoice Amount', styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }, 
+              { content: `Rs. ${totals.roundedGrandTotal.toFixed(2)}`, styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }
+            ],
+            ['Balance Due', `Rs. ${totals.roundedGrandTotal.toFixed(2)}`]
         ],
-        ['Round Off', `Rs. ${totals.roundOffAmount >= 0 ? '+' : ''}${totals.roundOffAmount.toFixed(2)}`],
-        [
-          { content: 'Final Invoice Amount', styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }, 
-          { content: `Rs. ${totals.roundedGrandTotal.toFixed(2)}`, styles: { fontStyle: 'bold', fillColor: [248, 249, 250] } }
-        ],
-        ['Balance Due', `Rs. ${totals.roundedGrandTotal.toFixed(2)}`]
-    ],
-    startY: summaryStartY,
-    margin: { left: center + 2, right: margin + 1 },
-    tableWidth: rightColWidth - 3,
-    theme: 'grid',
-    styles: { 
-      fontSize: 9, 
-      cellPadding: 2, 
-      lineWidth: 0.1, 
-      lineColor: [150, 150, 150] 
-    },
-    columnStyles: { 
-        0: { halign: 'left', cellWidth: (rightColWidth - 3) * 0.6 }, 
-        1: { halign: 'right', cellWidth: (rightColWidth - 3) * 0.4 } 
+        startY: summaryStartY,
+        margin: { left: center + 2, right: margin + 1 },
+        tableWidth: rightColWidth - 3,
+        theme: 'grid',
+        styles: { 
+          fontSize: 9, 
+          cellPadding: 2, 
+          lineWidth: 0.1, 
+          lineColor: [150, 150, 150] 
+        },
+        columnStyles: { 
+            0: { halign: 'left', cellWidth: (rightColWidth - 3) * 0.6 }, 
+            1: { halign: 'right', cellWidth: (rightColWidth - 3) * 0.4 } 
+        }
+    });
+
+    // Terms & Signature
+    let bottomY = footerStartY + containerHeight + 15;
+
+    if (bottomY > pageHeight - 35) {
+        doc.addPage();
+        doc.setDrawColor(0, 0, 0); 
+        doc.setLineWidth(0.5);
+        doc.rect(5, 5, pageWidth - 10, pageHeight - 10);
+        bottomY = margin;
     }
-});
 
-// Terms & Signature
-let bottomY = footerStartY + containerHeight + 15;
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Terms And Conditions', margin, bottomY);
+    doc.setFont('helvetica', 'normal');
+    doc.text('1. This is an electronically generated document.', margin, bottomY + 4);
+    doc.text('2. All disputes are subject to Tiruppur jurisdiction.', margin, bottomY + 8);
 
-if (bottomY > pageHeight - 35) {
-    doc.addPage();
-    doc.setDrawColor(0, 0, 0); 
-    doc.setLineWidth(0.5);
-    doc.rect(5, 5, pageWidth - 10, pageHeight - 10);
-    bottomY = margin;
-}
+    doc.setFont('helvetica', 'normal');
+    doc.text('Certified that the particular given above are true and correct for,', pageWidth - margin, bottomY, { align: 'right' });
+    doc.setFont('helvetica', 'bold');
+    doc.text(`For, ${pdfSeller.name}`, pageWidth - margin, bottomY + 6, { align: 'right' });
+    doc.text('Authorised Signatory', pageWidth - margin, bottomY + 20, { align: 'right' });
 
-doc.setFontSize(8);
-doc.setFont('helvetica', 'bold');
-doc.text('Terms And Conditions', margin, bottomY);
-doc.setFont('helvetica', 'normal');
-doc.text('1. This is an electronically generated document.', margin, bottomY + 4);
-doc.text('2. All disputes are subject to Tiruppur jurisdiction.', margin, bottomY + 8);
-
-doc.setFont('helvetica', 'normal');
-doc.text('Certified that the particular given above are true and correct for,', pageWidth - margin, bottomY, { align: 'right' });
-doc.setFont('helvetica', 'bold');
-doc.text(`For, ${pdfSeller.name}`, pageWidth - margin, bottomY + 6, { align: 'right' });
-doc.text('Authorised Signatory', pageWidth - margin, bottomY + 20, { align: 'right' });
-
-// Save PDF
-doc.save(`Invoice-${pdfInvoice.number}.pdf`);
+    // Save PDF
+    doc.save(`Invoice-${pdfInvoice.number}.pdf`);
   };
+
   // --- JSX (HTML Structure) ---
   return (
     <div style={styles.page}>
@@ -758,7 +768,7 @@ doc.save(`Invoice-${pdfInvoice.number}.pdf`);
                   readOnly={!isBuyerEditable}
                 />
                 <TextareaGroup 
-                  label="Address" 
+                  label="Address"
                   value={buyerDetails.address}
                   placeholder={buyerPlaceholders.address}
                   onChange={(e) => setBuyerDetails({...buyerDetails, address: e.target.value})} 
@@ -842,7 +852,7 @@ doc.save(`Invoice-${pdfInvoice.number}.pdf`);
                       <td style={styles.tableCell}>
                         <input 
                           type="number" 
-                          value={item.quantity} 
+                          value={item.quantity}
                           onChange={(e) => handleItemChange(index, 'quantity', e.target.value)} 
                           style={{...styles.tableInput, width: '80px', textAlign: 'center'}}
                         />
