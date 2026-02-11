@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 
 /**
 * Generates a unique invoice number based on the current timestamp.
@@ -164,6 +164,7 @@ function App() {
 
   const [selectedCustomer, setSelectedCustomer] = useState('');
   const [isBuyerEditable, setIsBuyerEditable] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
   // --- Effects ---
 
@@ -197,7 +198,13 @@ function App() {
     const newItems = [...items];
     const numericFields = ['quantity', 'rate', 'gstRate'];
     if (numericFields.includes(field)) {
-      newItems[index][field] = parseFloat(value) || 0;
+      // allow empty string while typing, otherwise coerce to number
+      if (value === '' || value === null) {
+        newItems[index][field] = '';
+      } else {
+        const n = Number(value);
+        newItems[index][field] = Number.isNaN(n) ? 0 : n;
+      }
     } else {
       newItems[index][field] = value;
     }
@@ -213,32 +220,32 @@ function App() {
     setItems(newItems);
   };
   
-  // --- Calculation Logic ---
-  const calculateTotals = () => {
+  // --- Calculation Logic (memoized for performance) ---
+  const totals = useMemo(() => {
     let subtotal = 0, totalCgst = 0, totalSgst = 0;
     items.forEach(item => {
-        const taxableValue = (parseFloat(item.quantity) || 0) * (parseFloat(item.rate) || 0);
-        subtotal += taxableValue;
-        const gstAmount = (taxableValue * (parseFloat(item.gstRate) || 0)) / 100;
-        totalCgst += gstAmount / 2;
-        totalSgst += gstAmount / 2;
+      const qty = Number(item.quantity) || 0;
+      const rate = Number(item.rate) || 0;
+      const gstRate = Number(item.gstRate) || 0;
+      const taxableValue = qty * rate;
+      subtotal += taxableValue;
+      const gstAmount = (taxableValue * gstRate) / 100;
+      totalCgst += gstAmount / 2;
+      totalSgst += gstAmount / 2;
     });
     const grandTotalBeforeRounding = subtotal + totalCgst + totalSgst;
     const roundedGrandTotal = Math.round(grandTotalBeforeRounding);
     const roundOffAmount = roundedGrandTotal - grandTotalBeforeRounding;
-    
-    return { 
-      subtotal, 
-      totalCgst, 
-      totalSgst, 
+    return {
+      subtotal,
+      totalCgst,
+      totalSgst,
       grandTotal: grandTotalBeforeRounding,
       roundedGrandTotal,
       roundOffAmount,
-      totalTax: totalCgst + totalSgst 
+      totalTax: totalCgst + totalSgst
     };
-  };
-  
-  const totals = calculateTotals();
+  }, [items]);
 
   // --- Customer Management Handlers ---
 
@@ -310,6 +317,9 @@ function App() {
       alert('Customer deleted.');
     }
   };
+
+  // compute dynamic styles based on theme
+  const styles = getStyles(isDarkMode);
 
   // --- PDF Generation ---
   const generatePDF = () => {
@@ -634,15 +644,118 @@ function App() {
     doc.save(`Invoice-${pdfInvoice.number}.pdf`);
   };
 
+  // Small reusable components use dynamic styles from closure
+  const InputGroup = ({ label, value, placeholder, onChange, theme, isMonospace = false, readOnly = false }) => {
+    const id = label ? String(label).toLowerCase().replace(/[^a-z0-9]+/g, '-') : undefined;
+    return (
+      <div>
+        <label htmlFor={id} style={styles.formLabel(theme)}>{label}</label>
+        <input
+          id={id}
+          type="text"
+          value={value}
+          placeholder={placeholder}
+          onChange={onChange}
+          readOnly={readOnly}
+          aria-label={label}
+          style={{
+            ...styles.formInput(theme),
+            fontFamily: isMonospace ? 'monospace' : 'inherit',
+            background: readOnly ? (isDarkMode ? '#0f172a' : '#f8fafc') : styles.formInput(theme).background,
+            cursor: readOnly ? 'not-allowed' : 'auto'
+          }}
+        />
+      </div>
+    );
+  };
+
+  const TextareaGroup = ({ label, value, placeholder, onChange, theme, readOnly = false }) => {
+    const id = label ? String(label).toLowerCase().replace(/[^a-z0-9]+/g, '-') : undefined;
+    return (
+      <div>
+        <label htmlFor={id} style={styles.formLabel(theme)}>{label}</label>
+        <textarea
+          id={id}
+          value={value}
+          placeholder={placeholder}
+          onChange={onChange}
+          readOnly={readOnly}
+          rows="2"
+          aria-label={label}
+          style={{
+            ...styles.formInput(theme),
+            resize: 'vertical',
+            background: readOnly ? (isDarkMode ? '#0f172a' : '#f8fafc') : styles.formInput(theme).background,
+            cursor: readOnly ? 'not-allowed' : 'auto'
+          }}
+        />
+      </div>
+    );
+  };
+
+  const TotalsRow = ({ label, value }) => (
+    <div style={styles.totalsRow}>
+      <span style={{ color: isDarkMode ? '#e6eef6' : '#166534', fontWeight: '600', fontSize: '0.95rem' }}>{label}</span>
+      <span style={{ color: isDarkMode ? '#e6eef6' : '#166534', fontWeight: '600', fontSize: '1rem' }}>{value}</span>
+    </div>
+  );
+
   // --- JSX (HTML Structure) ---
   return (
-    <div style={styles.page}>
+    <div style={styles.page} className="app-root">
       <div style={styles.container}>
+        <style>{`
+          .app-root input:focus, .app-root textarea:focus, .app-root select:focus {
+            box-shadow: 0 0 0 4px rgba(249,115,22,0.12) !important;
+            border-color: #F97316 !important;
+            outline: none;
+            transition: box-shadow 0.15s ease;
+          }
+          .app-root select { appearance: none; -webkit-appearance: none; -moz-appearance: none }
+        `}</style>
         
-        {/* Header Section */}
-        <div style={styles.header}>
-          <h1 style={styles.headerTitle}>📄 Tax Invoice Generator</h1>
-          <p style={styles.headerSubtitle}>basic billing</p>
+        {/* Top Bar */}
+        <div style={styles.topbar}>
+          <div style={{display:'flex',alignItems:'center',gap:16}}>
+            <div style={{width:36,height:36,borderRadius:8,background:'#EA580C',display:'flex',alignItems:'center',justifyContent:'center',color:'white',fontWeight:800}}>I</div>
+            <div>
+              <div style={{fontSize:16,fontWeight:700,color:isDarkMode ? '#e6eef6' : '#111827'}}>Invoices</div>
+              <div style={{fontSize:12,color:isDarkMode ? '#94a3b8' : '#6b7280'}}>Create and manage invoices</div>
+            </div>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:12}}>
+            {/* Seller name label */}
+            <div style={styles.sellerName}>VR Traders</div>
+
+            {/* Pill-shaped toggle: sun / moon */}
+            <div style={styles.toggleContainer} role="tablist" aria-label="Color mode">
+              <button
+                onClick={() => setIsDarkMode(false)}
+                aria-pressed={!isDarkMode}
+                aria-label="Switch to light mode"
+                style={{
+                  ...styles.toggleOption,
+                  ...(isDarkMode ? {} : styles.toggleActive)
+                }}
+              >
+                <span style={styles.toggleIcon}>☀️</span>
+              </button>
+
+              <button
+                onClick={() => setIsDarkMode(true)}
+                aria-pressed={isDarkMode}
+                aria-label="Switch to dark mode"
+                style={{
+                  ...styles.toggleOption,
+                  ...(isDarkMode ? styles.toggleActive : {})
+                }}
+              >
+                <span style={styles.toggleIcon}>🌙</span>
+              </button>
+            </div>
+
+            <div style={styles.profileCircle}></div>
+          </div>
         </div>
 
         <div style={styles.content}>
@@ -687,7 +800,7 @@ function App() {
               <select 
                 value={selectedCustomer}
                 onChange={handleCustomerSelect}
-                style={{...styles.input, flex: '1 1 300px', minWidth: '250px'}}
+                style={{...styles.input, flex: '1 1 300px', minWidth: '250px', appearance: 'none', paddingRight: '36px'}}
               >
                 <option value="">--- Select Existing Customer ---</option>
                 {savedCustomers.map((cust, index) => (
@@ -803,7 +916,9 @@ function App() {
                 {isBuyerEditable && (
                   <button 
                     onClick={handleSaveCustomer}
-                    style={{...styles.button, ...styles.success, marginTop: '0.5rem'}}
+                    disabled={!buyerDetails.name.trim()}
+                    aria-disabled={!buyerDetails.name.trim()}
+                    style={{...styles.button, ...styles.success, marginTop: '0.5rem', opacity: !buyerDetails.name.trim() ? 0.6 : 1}}
                   >
                     Save New Customer
                   </button>
@@ -846,6 +961,7 @@ function App() {
                           value={item.hsn} 
                           onChange={(e) => handleItemChange(index, 'hsn', e.target.value)} 
                           placeholder="HSN" 
+                          aria-label={`HSN for item ${index + 1}`}
                           style={{...styles.tableInput, width: '110px', fontFamily: 'monospace'}}
                         />
                       </td>
@@ -854,6 +970,9 @@ function App() {
                           type="number" 
                           value={item.quantity}
                           onChange={(e) => handleItemChange(index, 'quantity', e.target.value)} 
+                          min="0"
+                          step="any"
+                          aria-label={`Quantity for item ${index + 1}`}
                           style={{...styles.tableInput, width: '80px', textAlign: 'center'}}
                         />
                       </td>
@@ -862,6 +981,9 @@ function App() {
                           type="number" 
                           value={item.rate} 
                           onChange={(e) => handleItemChange(index, 'rate', e.target.value)} 
+                          min="0"
+                          step="0.01"
+                          aria-label={`Rate for item ${index + 1}`}
                           style={{...styles.tableInput, width: '100px', textAlign: 'right'}}
                         />
                       </td>
@@ -870,6 +992,10 @@ function App() {
                           type="number" 
                           value={item.gstRate} 
                           onChange={(e) => handleItemChange(index, 'gstRate', e.target.value)} 
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          aria-label={`GST percent for item ${index + 1}`}
                           style={{...styles.tableInput, width: '70px', textAlign: 'center'}}
                         />
                       </td>
@@ -887,8 +1013,7 @@ function App() {
             <button 
               onClick={addItem} 
               style={{...styles.button, ...styles.primary, marginTop: '1rem'}}
-              onMouseOver={(e) => e.target.style.background = '#2563eb'}
-              onMouseOut={(e) => e.target.style.background = '#3b82f6'}
+              aria-label="Add a new invoice item"
             >
               + Add Item
             </button>
@@ -901,9 +1026,8 @@ function App() {
               <button 
                 onClick={generatePDF} 
                 disabled={!scriptsLoaded}
+                aria-label="Generate PDF Invoice"
                 style={{...styles.button, ...styles.generateButton, opacity: scriptsLoaded ? 1 : 0.6, cursor: scriptsLoaded ? 'pointer' : 'not-allowed'}}
-                onMouseOver={(e) => {if(scriptsLoaded) e.target.style.transform = 'translateY(-2px)'}}
-                onMouseOut={(e) => {if(scriptsLoaded) e.target.style.transform = 'translateY(0)'}}
               >
                 {scriptsLoaded ? '📥 Generate PDF Invoice' : '⏳ Loading...'}
               </button>
@@ -944,230 +1068,244 @@ function App() {
 
 // --- Reusable Components ---
 
-const InputGroup = ({ label, value, placeholder, onChange, theme, isMonospace = false, readOnly = false }) => (
-  <div>
-    <label style={styles.formLabel(theme)}>{label}</label>
-    <input 
-      type="text" 
-      value={value}
-      placeholder={placeholder}
-      onChange={onChange}
-      readOnly={readOnly}
-      style={{
-        ...styles.formInput(theme),
-        fontFamily: isMonospace ? 'monospace' : 'inherit',
-        background: readOnly ? '#e9ecef' : 'white',
-        cursor: readOnly ? 'not-allowed' : 'auto'
-      }}
-    />
-  </div>
-);
-
-const TextareaGroup = ({ label, value, placeholder, onChange, theme, readOnly = false }) => (
-  <div>
-    <label style={styles.formLabel(theme)}>{label}</label>
-    <textarea 
-      value={value}
-      placeholder={placeholder}
-      onChange={onChange}
-      readOnly={readOnly}
-      rows="2"
-      style={{
-        ...styles.formInput(theme),
-        resize: 'vertical',
-        background: readOnly ? '#e9ecef' : 'white',
-        cursor: readOnly ? 'not-allowed' : 'auto'
-      }}
-    />
-  </div>
-);
-
-const TotalsRow = ({ label, value }) => (
-  <div style={styles.totalsRow}>
-    <span style={{ color: '#166534', fontWeight: '600', fontSize: '0.95rem' }}>{label}</span>
-    <span style={{ color: '#166534', fontWeight: '600', fontSize: '1rem' }}>{value}</span>
-  </div>
-);
-
 // --- Styles Object ---
-const styles = {
-  page: { 
-    minHeight: '100vh', 
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
-    padding: '2rem 1rem', 
-    fontFamily: 'system-ui, -apple-system, sans-serif' 
+const getStyles = (isDarkMode) => ({
+  page: {
+    minHeight: '100vh',
+    background: isDarkMode ? '#0f172a' : '#F9FAFB',
+    padding: '24px',
+    fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
+    color: isDarkMode ? '#e6eef6' : '#0f172a'
   },
-  container: { 
-    maxWidth: '1200px', 
-    margin: '0 auto', 
-    background: 'white', 
-    borderRadius: '16px', 
-    boxShadow: '0 20px 60px rgba(0,0,0,0.3)', 
-    overflow: 'hidden' 
+  container: {
+    maxWidth: '1200px',
+    margin: '0 auto',
+    background: isDarkMode ? '#1e293b' : '#FFFFFF',
+    borderRadius: '12px',
+    boxShadow: isDarkMode ? '0 2px 10px rgba(2,6,23,0.6)' : '0 2px 10px rgba(2,6,23,0.05)',
+    overflow: 'hidden',
+    border: `1px solid ${isDarkMode ? '#334155' : '#E5E7EB'}`
   },
-  header: { 
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
-    padding: '2rem', 
-    textAlign: 'center' 
+  topbar: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '18px 24px',
+    borderBottom: `1px solid ${isDarkMode ? '#273449' : '#EEF2F7'}`,
+    background: 'transparent'
   },
-  headerTitle: { 
-    margin: 0, 
-    fontSize: '2rem', 
-    fontWeight: '700', 
-    color: 'white', 
-    letterSpacing: '0.5px' 
+  tab: {
+    background: 'transparent',
+    border: 'none',
+    color: isDarkMode ? '#cbd5e1' : '#6B7280',
+    padding: '8px 10px',
+    borderRadius: 8,
+    cursor: 'pointer'
   },
-  headerSubtitle: { 
-    margin: '0.5rem 0 0 0', 
-    color: 'rgba(255,255,255,0.9)', 
-    fontSize: '0.95rem' 
+  tabActive: {
+    background: isDarkMode ? '#18304a' : '#FFF7ED',
+    border: `1px solid ${isDarkMode ? '#2b495f' : '#FDE0C2'}`,
+    color: '#F97316',
+    padding: '8px 10px',
+    borderRadius: 8,
+    cursor: 'pointer',
+    fontWeight: 700
   },
-  content: { padding: '2rem' },
-  card: { 
-    marginBottom: '2rem', 
-    padding: '1.25rem', 
-    background: '#f8f9fa', 
-    borderRadius: '12px', 
-    border: '2px solid #e9ecef' 
+  content: { padding: '24px' },
+  card: {
+    marginBottom: '16px',
+    padding: '16px',
+    background: isDarkMode ? '#0f172a' : '#FFFFFF',
+    borderRadius: '10px',
+    border: `1px solid ${isDarkMode ? '#334155' : '#E5E7EB'}`
   },
-  cardTitle: { 
-    margin: '0 0 1rem 0', 
-    fontSize: '1.2rem', 
-    fontWeight: '700', 
-    display: 'flex', 
-    alignItems: 'center', 
-    gap: '0.5rem' 
+  cardTitle: {
+    margin: '0 0 12px 0',
+    fontSize: '16px',
+    fontWeight: 700,
+    color: isDarkMode ? '#e6eef6' : '#111827'
   },
-  label: { 
-    display: 'block', 
-    fontSize: '0.85rem', 
-    fontWeight: '600', 
-    color: '#495057', 
-    marginBottom: '0.5rem' 
+  label: {
+    display: 'block',
+    fontSize: '12px',
+    fontWeight: 700,
+    color: isDarkMode ? '#cbd5e1' : '#6B7280',
+    marginBottom: '6px',
+    letterSpacing: '0.6px',
+    textTransform: 'uppercase'
   },
-  input: { 
-    width: '100%', 
-    padding: '0.75rem', 
-    border: '2px solid #dee2e6', 
-    borderRadius: '8px', 
-    fontSize: '0.95rem', 
-    boxSizing: 'border-box' 
+  input: {
+    width: '100%',
+    padding: '12px',
+    border: '1px solid',
+    borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+    borderRadius: 8,
+    fontSize: '14px',
+    background: isDarkMode ? '#1e293b' : '#ffffff',
+    color: isDarkMode ? '#e6eef6' : '#0f172a',
+    boxSizing: 'border-box'
   },
-  sellerCard: { 
-    background: '#fff8f0', 
-    padding: '1.5rem', 
-    borderRadius: '12px', 
-    border: '2px solid #ffedd5' 
+  sellerCard: {
+    background: isDarkMode ? '#12202b' : '#fff',
+    padding: '16px',
+    borderRadius: '10px',
+    border: `1px solid ${isDarkMode ? '#334155' : '#FEE7D6'}`
   },
-  buyerCard: { 
-    background: '#f0f9ff', 
-    padding: '1.5rem', 
-    borderRadius: '12px', 
-    border: '2px solid #bae6fd' 
+  buyerCard: {
+    background: isDarkMode ? '#12202b' : '#fff',
+    padding: '16px',
+    borderRadius: '10px',
+    border: `1px solid ${isDarkMode ? '#334155' : '#DBEAFE'}`
   },
-  formGrid: { 
-    display: 'flex', 
-    flexDirection: 'column', 
-    gap: '1rem'
+  formGrid: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px'
   },
   formLabel: (theme) => ({
-    display: 'block', 
-    fontSize: '0.8rem', 
-    fontWeight: '600', 
-    marginBottom: '0.4rem',
-    color: theme === 'orange' ? '#7c2d12' : '#075985'
+    display: 'block',
+    fontSize: '12px',
+    fontWeight: 700,
+    marginBottom: '6px',
+    color: isDarkMode ? '#cbd5e1' : '#6B7280'
   }),
   formInput: (theme) => ({
-    width: '100%', 
-    padding: '0.7rem', 
-    borderRadius: '8px', 
-    fontSize: '0.9rem',
-    border: `2px solid ${theme === 'orange' ? '#fed7aa' : '#7dd3fc'}`,
-    background: 'white',
-    boxSizing: 'border-box'
+    width: '100%',
+    padding: '12px',
+    borderRadius: 8,
+    border: '1px solid',
+    borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+    fontSize: '14px',
+    background: isDarkMode ? '#1e293b' : '#ffffff',
+    color: isDarkMode ? '#e6eef6' : '#0f172a',
+    boxSizing: 'border-box',
+    outline: 'none',
+    transition: 'box-shadow 0.15s ease'
   }),
-  tableWrapper: { 
-    overflowX: 'auto', 
-    borderRadius: '12px', 
-    border: '2px solid #e5e7eb' 
+  tableWrapper: {
+    overflowX: 'auto',
+    borderRadius: '8px',
+    border: `1px solid ${isDarkMode ? '#334155' : '#EEF2F7'}`
   },
-  table: { 
-    width: '100%', 
-    borderCollapse: 'collapse', 
-    background: 'white' 
+  table: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    background: isDarkMode ? '#0f172a' : 'white'
   },
-  tableHeaderRow: { 
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
+  tableHeaderRow: {
+    background: 'transparent'
   },
-  tableHeader: { 
-    padding: '1rem 0.75rem', 
-    textAlign: 'left', 
-    color: 'white', 
-    fontSize: '0.85rem', 
-    fontWeight: '600', 
-    whiteSpace: 'nowrap' 
+  tableHeader: {
+    padding: '12px',
+    textAlign: 'left',
+    color: isDarkMode ? '#cbd5e1' : '#6B7280',
+    fontSize: '13px',
+    fontWeight: 700
   },
-  tableBodyRow: (index) => ({ 
-    borderBottom: '1px solid #e5e7eb', 
-    background: index % 2 === 0 ? '#fafafa' : 'white' 
+  tableBodyRow: (index) => ({
+    borderBottom: `1px solid ${isDarkMode ? '#273449' : '#F1F5F9'}`,
+    background: isDarkMode ? '#0f172a' : '#ffffff'
   }),
-  tableCell: { padding: '0.75rem' },
-  tableInput: { 
-    width: '100%', 
-    padding: '0.6rem', 
-    border: '1px solid #d1d5db', 
-    borderRadius: '6px', 
-    fontSize: '0.9rem', 
-    boxSizing: 'border-box' 
+  tableCell: { padding: '10px' },
+  tableInput: {
+    width: '100%',
+    padding: '12px',
+    border: '1px solid',
+    borderColor: isDarkMode ? '#334155' : '#F1F5F9',
+    borderRadius: 8,
+    fontSize: '14px',
+    background: isDarkMode ? '#1e293b' : '#ffffff',
+    color: isDarkMode ? '#e6eef6' : '#0f172a'
   },
-  deleteItemButton: { 
-    background: '#ef4444', 
-    color: 'white', 
-    border: 'none', 
-    borderRadius: '6px', 
-    width: '32px', 
-    height: '32px', 
-    cursor: 'pointer', 
-    fontSize: '1rem', 
-    fontWeight: 'bold' 
+  deleteItemButton: {
+    background: '#ef4444',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    width: '32px',
+    height: '32px',
+    cursor: 'pointer',
+    fontSize: '1rem',
+    fontWeight: 'bold'
   },
-  totalsCard: { 
-    background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', 
-    padding: '1.5rem', 
-    borderRadius: '12px', 
-    border: '2px solid #86efac' 
+  totalsCard: {
+    background: isDarkMode ? '#12202b' : '#fff',
+    padding: '12px',
+    borderRadius: '10px',
+    border: `1px solid ${isDarkMode ? '#334155' : '#EEF2F7'}`
   },
-  totalsRow: { 
-    display: 'flex', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    padding: '0.5rem 0', 
-    borderBottom: '1px solid #bbf7d0' 
+  totalsRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '8px 0'
+  },
+  sellerName: {
+    fontSize: '14px',
+    fontWeight: 700,
+    color: isDarkMode ? '#cbd5e1' : '#374151',
+    marginRight: '8px'
+  },
+  toggleContainer: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    background: isDarkMode ? '#0b1220' : '#f3f4f6',
+    padding: '4px',
+    borderRadius: 999,
+    gap: 4,
+    border: `1px solid ${isDarkMode ? '#273449' : '#e6e6e6'}`
+  },
+  toggleOption: {
+    width: 36,
+    height: 28,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+    background: 'transparent',
+    border: 'none',
+    cursor: 'pointer',
+    color: isDarkMode ? '#94a3b8' : '#6b7280',
+    fontSize: '14px',
+    padding: 0
+  },
+  toggleActive: {
+    background: '#F97316',
+    color: 'white',
+    boxShadow: '0 4px 12px rgba(249,115,22,0.12)'
+  },
+  toggleIcon: {
+    lineHeight: 1,
+    fontSize: '16px'
+  },
+  profileCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    background: isDarkMode ? '#0b1220' : '#f3f4f6'
   },
   button: {
-    border: 'none', 
-    padding: '0.75rem 1.5rem', 
+    border: 'none',
+    padding: '8px 12px',
     borderRadius: '8px',
-    fontSize: '0.95rem', 
-    fontWeight: '600', 
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
+    fontSize: '14px',
+    fontWeight: 700,
+    cursor: 'pointer'
   },
-  primary: { background: '#3b82f6', color: 'white' },
-  secondary: { background: '#5a67d8', color: 'white' },
+  primary: { background: '#F97316', color: isDarkMode ? '#0b1220' : 'white' },
+  secondary: { background: 'transparent', color: '#F97316', border: `1px solid ${isDarkMode ? '#2b495f' : '#FDE0C2'}` },
   danger: { background: '#ef4444', color: 'white' },
-  success: { background: '#22c55e', color: 'white' },
+  success: { background: '#10b981', color: 'white' },
   generateButton: {
     width: '100%',
-    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-    color: 'white',
-    padding: '1.25rem',
-    borderRadius: '12px',
-    fontSize: '1.1rem',
-    fontWeight: '700',
-    boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)',
-    transition: 'all 0.3s ease'
+    background: '#F97316',
+    color: isDarkMode ? '#0b1220' : 'white',
+    padding: '12px',
+    borderRadius: '10px',
+    fontSize: '15px',
+    fontWeight: 800,
+    boxShadow: isDarkMode ? '0 6px 18px rgba(249,115,22,0.08)' : '0 6px 18px rgba(249,115,22,0.12)'
   }
-};
+});
 
 export default App;
