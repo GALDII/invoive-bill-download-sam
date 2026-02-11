@@ -106,6 +106,11 @@ function App() {
   const totals = useMemo(() => calculateTotals(items), [items]);
 
   const handleGeneratePDF = () => {
+    // Validation: Check if buyer details are filled
+    if (!buyerDetails.name || !buyerDetails.address || !buyerDetails.gstin || !buyerDetails.state) {
+      alert("Please fill in all Buyer Details (Name, Address, GSTIN, State) before generating the PDF.");
+      return;
+    }
     generatePDF(invoiceDetails, sellerDetails, buyerDetails, items, totals);
   };
 
@@ -113,15 +118,15 @@ function App() {
     <div className={`min-h-screen transition-colors duration-200 ${isDarkMode ? 'dark bg-slate-900 text-slate-100' : 'bg-gray-50 text-gray-900'} font-sans pb-20`}>
 
       {/* Top Bar */}
-      <div className="border-b border-gray-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md sticky top-0 z-10">
+      <div className="border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 sticky top-0 z-10 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white font-extrabold text-xl shadow-lg shadow-orange-500/20">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white font-extrabold text-lg md:text-xl shadow-lg shadow-orange-500/20">
               I
             </div>
             <div>
-              <h1 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">Invoices</h1>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Create & Manage</p>
+              <h1 className="text-base md:text-lg font-bold text-gray-900 dark:text-white leading-tight">Invoices</h1>
+              <p className="text-[10px] md:text-xs text-gray-500 dark:text-gray-400 font-medium hidden sm:block">Create & Manage</p>
             </div>
           </div>
 
