@@ -71,7 +71,7 @@ function App() {
       const customer = savedCustomers.find(c => c.name === customerName);
       if (customer) {
         setBuyerDetails(customer);
-        setIsBuyerEditable(false);
+        setIsBuyerEditable(true);
       }
     }
   };
