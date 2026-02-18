@@ -1,13 +1,19 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { convertAmountToWords } from './format';
+import { getLogo } from './imageUtils';
 
-export const generatePDF = (invoiceDetails, sellerDetails, buyerDetails, items, totals) => {
+export const generatePDF = async (invoiceDetails, sellerDetails, buyerDetails, items, totals, options = {}) => {
+    // Get PDF settings
+    const pdfSettings = JSON.parse(localStorage.getItem('pdfSettings') || '{}');
+    const margin = pdfSettings.margin || 14;
+    const fontSize = pdfSettings.fontSize || 9;
+    const showLogo = options.showLogo !== false;
+
     const doc = new jsPDF('p', 'mm', 'a4');
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 14;
     const center = pageWidth / 2;
 
     // --- Page Border ---
@@ -17,6 +23,20 @@ export const generatePDF = (invoiceDetails, sellerDetails, buyerDetails, items, 
 
     // Company Information (Seller) - Starting at top
     let currentY = 10;
+    
+    // Add logo if available
+    if (showLogo) {
+      const logo = getLogo();
+      if (logo) {
+        try {
+          doc.addImage(logo, 'PNG', margin, currentY, 30, 15);
+          currentY += 18;
+        } catch (error) {
+          console.error('Error adding logo:', error);
+        }
+      }
+    }
+    
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
@@ -180,7 +200,7 @@ export const generatePDF = (invoiceDetails, sellerDetails, buyerDetails, items, 
             lineColor: [150, 150, 150]
         },
         styles: {
-            fontSize: 8,
+            fontSize: fontSize - 1,
             lineWidth: 0.1,
             lineColor: [150, 150, 150],
             cellPadding: 1.5
@@ -295,4 +315,155 @@ export const generatePDF = (invoiceDetails, sellerDetails, buyerDetails, items, 
 
     // Save PDF
     doc.save(`Invoice-${invoiceDetails.number}.pdf`);
+};
+
+/**
+ * Print invoice using browser print dialog
+ */
+export const printInvoice = (invoiceDetails, sellerDetails, buyerDetails, items, totals) => {
+    const printWindow = window.open('', '_blank');
+    const printContent = generatePrintHTML(invoiceDetails, sellerDetails, buyerDetails, items, totals);
+    
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+    }, 250);
+};
+
+/**
+ * Generate HTML for print preview
+ */
+const generatePrintHTML = (invoiceDetails, sellerDetails, buyerDetails, items, totals) => {
+    const logo = getLogo();
+    const logoImg = logo ? `<img src="${logo}" style="max-width: 150px; max-height: 75px;" />` : '';
+    
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Invoice ${invoiceDetails.number}</title>
+    <style>
+        @media print {
+            @page { margin: 20mm; }
+            body { margin: 0; }
+        }
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 210mm;
+            margin: 0 auto;
+        }
+        .header { text-align: center; margin-bottom: 20px; }
+        .company-name { font-size: 18px; font-weight: bold; margin: 10px 0; }
+        .invoice-title { 
+            background: #e8f1fc; 
+            padding: 10px; 
+            text-align: center; 
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background: #e8f1fc; font-weight: bold; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .totals { margin-top: 20px; }
+        .footer { margin-top: 40px; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        ${logoImg}
+        <div class="company-name">${sellerDetails.name}</div>
+        <div>${sellerDetails.address}</div>
+        <div>GSTIN: ${sellerDetails.gstin} | State Code: ${sellerDetails.stateCode}</div>
+    </div>
+    
+    <div class="invoice-title">TAX INVOICE</div>
+    
+    <div class="details-grid">
+        <div>
+            <strong>Details of Receiver | Billed to</strong><br>
+            ${buyerDetails.name}<br>
+            ${buyerDetails.address}<br>
+            GSTIN: ${buyerDetails.gstin}<br>
+            State: ${buyerDetails.state} (${buyerDetails.stateCode})
+        </div>
+        <div>
+            <strong>Invoice Number:</strong> ${invoiceDetails.number}<br>
+            <strong>Invoice Date:</strong> ${invoiceDetails.date}<br>
+            <strong>State:</strong> ${sellerDetails.state}<br>
+            <strong>Reverse Charge:</strong> ${invoiceDetails.reverseCharge}
+        </div>
+    </div>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>Sr.</th>
+                <th>Description</th>
+                <th>HSN</th>
+                <th>Qty</th>
+                <th class="text-right">Rate</th>
+                <th class="text-right">Amount</th>
+                <th class="text-right">GST</th>
+                <th class="text-right">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${items.map((item, index) => {
+                const amount = (item.quantity || 0) * (item.rate || 0);
+                const gst = amount * (item.gstRate || 0) / 100;
+                const total = amount + gst;
+                return `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td>${item.description}</td>
+                    <td>${item.hsn}</td>
+                    <td>${item.quantity}</td>
+                    <td class="text-right">₹${(item.rate || 0).toFixed(2)}</td>
+                    <td class="text-right">₹${amount.toFixed(2)}</td>
+                    <td class="text-right">${item.gstRate}%</td>
+                    <td class="text-right">₹${total.toFixed(2)}</td>
+                </tr>
+                `;
+            }).join('')}
+        </tbody>
+    </table>
+    
+    <div class="totals">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div>
+                <strong>Total Invoice Amount in words:</strong><br>
+                ${convertAmountToWords(totals.roundedGrandTotal)}
+            </div>
+            <div>
+                <table>
+                    <tr><td>Subtotal</td><td class="text-right">₹${totals.subtotal.toFixed(2)}</td></tr>
+                    <tr><td>CGST</td><td class="text-right">₹${totals.totalCgst.toFixed(2)}</td></tr>
+                    <tr><td>SGST</td><td class="text-right">₹${totals.totalSgst.toFixed(2)}</td></tr>
+                    <tr><td>Round Off</td><td class="text-right">₹${totals.roundOffAmount.toFixed(2)}</td></tr>
+                    <tr style="font-weight: bold;"><td>Grand Total</td><td class="text-right">₹${totals.roundedGrandTotal.toFixed(2)}</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p><strong>Terms And Conditions</strong></p>
+        <p>1. This is an electronically generated document.</p>
+        <p>2. All disputes are subject to Tiruppur jurisdiction.</p>
+        <p style="text-align: right;">
+            Certified that the particular given above are true and correct<br>
+            <strong>For, ${sellerDetails.name}</strong><br>
+            Authorised Signatory
+        </p>
+    </div>
+</body>
+</html>
+    `;
 };
